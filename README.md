@@ -25,7 +25,8 @@ The edbg tracing functionality is (hopefully) a somewhat more novel approach.
 ```
    Run: make
    Add: code:add_path("YOUR-PATH-HERE/edbg/ebin").
-   to your ~/.erlang file.
+   Add: code:add_path("YOUR-PATH-HERE/edbg/deps/pp_record/ebin").
+     to your ~/.erlang file.
 ```
 
 <a name="dbg-usage"></a>
@@ -222,6 +223,16 @@ Load the latest trace-start setup from file.
 
    (<0.648.0>)> v SS
    'SSL' = nossl
+
+   # IF WE KNOW THE VARIABLE CONTAINS A RECORD, WE CAN PRETTY PRINT IT
+   (<0.660.0>)> pr GS
+   'GS' =
+   #gs{gconf =
+           #gconf{
+               yaws_dir = undefined,trace = false,flags = 64,
+               logdir = "./logs",ebin_dir = [],src_dir = [],runmods = [],
+       ....
+
 
    # AFTER SOME MORE 'next' OPERATIONS, WE ARE HERE:
    (<0.648.0>)> n
@@ -537,6 +548,31 @@ Here is an example of an interactively defined conditional break point
    Call: yaws_server:peername/2 , return value:
    -----------------------------------
    {{127,0,0,1},56123}
+
+   # IF WE KNOW THE ARGUMENT TO BE A RECORD, WE CAN PRETTY PRINT IT
+   tlist> s 173
+
+   Call: yaws_server:handle_normal_request/5
+   -----------------------------------
+
+   handle_normal_request(CliSock, ARG, UT = #urltype{type=error}, _, N) ->
+
+   handle_normal_request(CliSock, ARG, UT, Authdirs, N) ->
+
+   -----------------------------------
+
+   tlist> pr 173 2
+
+   Call: yaws_server:handle_normal_request/5 , argument 2:
+   -----------------------------------
+   #arg{clisock = #Port<0.10952>,
+        client_ip_port = {{127,0,0,1},59557},
+        headers = #headers{connection = undefined,accept = "*/*",
+                           host = "localhost:8080",
+                           if_modified_since = undefined,
+                           if_match = undefined,if_none_match = undefined,
+      ....
+
 
    # HERE IS AN EXAMPLE OF HOW WE CAN SEARCH FOR PARTICULAR
    # FUNCTION CALL THAT WE ARE INTERESTED IN.

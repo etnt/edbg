@@ -117,6 +117,7 @@ rloop(Pid, Prompt) ->
         ["s"++X] -> show(?mytracer, X);
         ["r"++X] -> show_return(?mytracer, X);
         ["w"++X] -> show_raw(?mytracer, X);
+        ["pr"++X]-> show_record(?mytracer, X);
         ["p"++X] -> set_page(?mytracer, X);
         ["h"++_] -> print_help();
         ["q"++_] -> Pid ! quit, exit(normal);
@@ -153,6 +154,9 @@ find(Pid, X) ->
 show(Pid, X) ->
     parse_integers(Pid, X, show).
 
+show_record(Pid, X) ->
+    parse_integers(Pid, X, show_record).
+
 set_page(Pid, X) ->
     parse_integers(Pid, X, set_page).
 
@@ -183,8 +187,9 @@ parse_integers(Pid, X, Msg) ->
 print_help() ->
     S1 = " (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom",
     S2 = " (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>",
-    S3 = " (p)agesize <N> (f)ind <M>:<Fx> | <RetVal> (q)uit",
-    io:format("~n~s~n~s~n~s~n",[S1,S2,S3]).
+    S3 = " (pr)etty print record <N> <ArgN>",
+    S4 = " (p)agesize <N> (f)ind <M>:<Fx> | <RetVal> (q)uit",
+    io:format("~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4]).
 
 
 tstop() -> ?mytracer ! stop.
@@ -258,6 +263,26 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
                         ArgStr = "argument "++integer_to_list(ArgN)++":",
                         io:format("~nCall: ~p:~p/~p , ~s~n~s~n~p~n",
                                   [M,F,length(A),ArgStr,Sep,lists:nth(ArgN,A)]);
+                    _ ->
+                        io:format("not found~n",[])
+                end
+            catch
+                _:_ ->  io:format("not found~n",[])
+            end,
+            ?MODULE:tloop(X, Tlist ,Buf);
+
+        {show_record, N, ArgN} ->
+            dbg:stop_clear(),
+            try
+                case lists:keyfind(N, 1, Buf) of
+                    {_,{trace, _Pid, call, {M,F,A}}} ->
+                        Sep = pad(35, $-),
+                        Fname = edbg:find_source(M),
+                        {ok, Defs} = pp_record:read(Fname),
+                        ArgStr = "argument "++integer_to_list(ArgN)++":",
+                        io:format("~nCall: ~p:~p/~p , ~s~n~s~n~s~n",
+                                  [M,F,length(A),ArgStr,Sep,
+                                   pp_record:print(lists:nth(ArgN,A), Defs)]);
                     _ ->
                         io:format("not found~n",[])
                 end

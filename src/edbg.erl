@@ -511,16 +511,38 @@ aloop(#s{meta   = Meta,
 
         {Prompt, var, Var} ->
             {_Cur,_Max,Bs,_} = S#s.stack,
-            VarStr = erlang:atom_to_list(Var),
-            PrefixFun = fun({K,_V}) ->
-                                lists:prefix(VarStr, erlang:atom_to_list(K))
-                        end,
-            case lists:filtermap(PrefixFun, Bs) of
+            case find_var(Var, Bs) of
                 [{VarName, Val}] -> io:format("~p = ~p~n",[VarName, Val]);
                 [{_Var1, _Val1}|_] = Candidates ->
                     io:format("~p ambigious prefix: ~p~n",
                               [Var, [N || {N,_} <- Candidates]]);
                 []      -> io:format("~p not found~n",[Var])
+            end,
+            ?MODULE:aloop(S);
+
+        {Prompt, pr_var, Var} ->
+            {_Cur,_Max,Bs,_} = S#s.stack,
+            try
+                case find_var(Var, Bs) of
+                    [{VarName, Val}] ->
+                        case S#s.stack of
+                            {_,_,_,{Mod,_Line}} ->
+                                Fname = edbg:find_source(Mod),
+                                {ok, Defs} = pp_record:read(Fname),
+                                io:format("~p =~n~s~n",
+                                          [VarName,
+                                           pp_record:print(Val, Defs)]);
+                            _ ->
+                                io:format("No module info available...~n",[])
+                        end;
+                    [{_Var1, _Val1}|_] = Candidates ->
+                        io:format("~p ambigious prefix: ~p~n",
+                                  [Var, [N || {N,_} <- Candidates]]);
+                    []      ->
+                        io:format("~p not found~n",[Var])
+                end
+            catch
+                _:_ -> io:format("Operation failed...~n",[])
             end,
             ?MODULE:aloop(S);
 
@@ -689,6 +711,18 @@ load_all_breakpoints() ->
         end,
     [F(Z) || Z <- L].
 
+%% First try for exact match, then for a prefix match
+find_var(Var, Bindings) ->
+    case int:get_binding(Var, Bindings) of
+        {value, Val} ->
+            [{Var,Val}];
+        _ ->
+            VarStr = erlang:atom_to_list(Var),
+            PrefixFun = fun({K,_V}) ->
+                                lists:prefix(VarStr, erlang:atom_to_list(K))
+                        end,
+            lists:filtermap(PrefixFun, Bindings)
+    end.
 
 prompt(Pid, Apid) when is_pid(Pid), is_pid(Apid) ->
     Prompt = "("++pid_to_list(Pid)++")> ",
@@ -703,6 +737,7 @@ ploop(Apid, Prompt) ->
         ["f"++_] -> Apid ! {self(), finish};
         ["c"++_] -> Apid ! {self(), continue};
         ["m"++_] -> Apid ! {self(), messages};
+        ["pr"++X] -> Apid ! {self(), pr_var, list_to_atom(string:strip(X))};
         ["p"++_] -> Apid ! {self(), processes};
         ["k"++_] -> Apid ! {self(), skip};
         ["u"++_] -> Apid ! {self(), up};
@@ -743,9 +778,10 @@ print_help() ->
     S1 = " (h)elp (a)t <Ctx> (n)ext (s)tep (f)inish (c)ontinue s(k)ip",
     S2 = " (m)essages (t)oggle trace (q)uit (br)eakpoints (p)rocesses",
     S3 = " (de)lete/(di)sable/(en)able/(te)st/(b)reak <Line | Mod Line>",
-    S4 = " (v)ar <variable> (e)val <expr> (i)nterpret <Mod>  conte(x)t <Ctx>",
-    S5 = " (u)p (d)own (l)ist module <Mod Line <Ctx>>",
-    io:format("~n~s~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4,S5]).
+    S4 = " (v)ar <variable> (e)val <expr> (i)nterpret <Mod>",
+    S5 = " (pr)etty print record <variable> conte(x)t <Ctx>",
+    S6 = " (u)p (d)own (l)ist module <Mod Line <Ctx>>",
+    io:format("~n~s~n~s~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4,S5,S6]).
 
 
 set_break(Apid, X) ->
