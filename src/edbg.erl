@@ -57,7 +57,7 @@
 
 %% Internal export
 -export([aloop/1,
-         ploop/2,
+         ploop/3,
          it_loop/1,
          itest_at_break/1,
          find_source/1
@@ -726,10 +726,16 @@ find_var(Var, Bindings) ->
 
 prompt(Pid, Apid) when is_pid(Pid), is_pid(Apid) ->
     Prompt = "("++pid_to_list(Pid)++")> ",
-    ploop(Apid, Prompt).
+    ploop(Apid, Prompt, _PrevCmd = []).
 
-ploop(Apid, Prompt) ->
-    case string:tokens(io:get_line(Prompt), "\n") of
+ploop(Apid, Prompt, PrevCmd) ->
+    %% Empty prompt repeats previous command
+    Cmd = case string:tokens(io:get_line(Prompt), "\n") of
+                []   -> PrevCmd;
+                Cmd0 -> Cmd0
+          end,
+
+    case Cmd of
         ["a"++X] -> at(Apid, X);
         ["l"++X] -> send_list_module(Apid, X);
         ["n"++_] -> Apid ! {self(), next};
@@ -764,7 +770,7 @@ ploop(Apid, Prompt) ->
         _X ->
             io:format("prompt got: ~p~n",[_X])
     end,
-    ?MODULE:ploop(Apid, Prompt).
+    ?MODULE:ploop(Apid, Prompt, Cmd).
 
 at(Apid, X) ->
     try

@@ -224,6 +224,10 @@ Load the latest trace-start setup from file.
    (<0.648.0>)> v SS
    'SSL' = nossl
 
+   # SUPPLYING AN EMPTY PROMPT REPEATS LAST COMMAND
+   (<0.648.0>)> 
+   'SSL' = nossl
+
    # IF WE KNOW THE VARIABLE CONTAINS A RECORD, WE CAN PRETTY PRINT IT
    (<0.660.0>)> pr GS
    'GS' =
