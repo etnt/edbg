@@ -341,7 +341,7 @@ attach(Pid) when is_pid(Pid) ->
                      break_points = int:all_breaks(),
                      prompt=Prompt});
         Else ->
-            io:format("Failed to attach to process: ~p~n",[Pid]),
+            error_msg("Failed to attach to process: ~p~n",[Pid]),
             Else
     end.
 
@@ -359,7 +359,7 @@ aloop(#s{meta   = Meta,
         %% FROM THE INTERPRETER (?)
         {int,{new_break,{{Mod,Line},_L} = Bp}} ->
             Bps = S#s.break_points,
-            io:format("Break point set at ~p:~p~n",[Mod,Line]),
+            info_msg([c_hi("Break point set at"), " ~p:~p~n"], [Mod,Line]),
             ?MODULE:aloop(S#s{break_points = [Bp|Bps]});
 
         {int,{interpret,_Mod}} ->
@@ -390,12 +390,12 @@ aloop(#s{meta   = Meta,
         {Meta,{exit_at, {Mod, Line}, Reason, Cur}} ->
             Bs = int:meta(Meta, bindings, nostack),
             mlist(Mod,Line,S#s.context),
-            io:format("ERROR REASON: ~p~n",[Reason]),
+            error_msg("ERROR REASON: ~p~n",[Reason]),
             ?MODULE:aloop(S#s{break_at = {Mod,Line},
                               stack = {Cur+1,Cur+1,Bs,{Mod,Line}}});
 
         {Meta, {trace_output, StrFun}} ->
-            io:format("~s~n",[StrFun("~tp")]),
+            info_msg("~s~n",[StrFun("~tp")]),
             ?MODULE:aloop(S);
 
         %% FROM THE PROMPTER
@@ -403,9 +403,9 @@ aloop(#s{meta   = Meta,
             Bs = int:meta(Meta, bindings, nostack),
             case evaluate(Str, Bs) of
                 {ok, Value} ->
-                    io:format("EVALUATED VALUE:~n~p~n",[Value]);
+                    info_msg([c_hi("EVALUATED VALUE"), ":~n~p~n"], [Value]);
                 {error, ErrStr} ->
-                    io:format("~s~n",[ErrStr])
+                    error_msg("~s~n",[ErrStr])
             end,
             ?MODULE:aloop(S);
 
@@ -421,7 +421,7 @@ aloop(#s{meta   = Meta,
 
                 top ->
                     Stack = S#s.stack,
-                    io:format("Top of stack frames!~n",[])
+                    att_msg("Top of stack frames!~n",[])
             end,
             ?MODULE:aloop(S#s{stack = Stack});
 
@@ -448,7 +448,7 @@ aloop(#s{meta   = Meta,
                 {_,_,_,{Mod,Line}} ->
                     mlist(Mod,Line,S#s.context);
                 _ ->
-                    io:format("No info available...~n",[])
+                    att_msg("No info available...~n",[])
             end,
             ?MODULE:aloop(S);
 
@@ -457,7 +457,7 @@ aloop(#s{meta   = Meta,
                 {_,_,_,{Mod,Line}} ->
                     mlist(Mod,Line,Ctx);
                 _ ->
-                    io:format("No info available...~n",[])
+                    att_msg("No info available...~n",[])
             end,
             ?MODULE:aloop(S);
 
@@ -487,7 +487,7 @@ aloop(#s{meta   = Meta,
 
         {Prompt, messages = X} ->
             Ms = int:meta(Meta, X),
-            io:format("MSGS: ~p~n",[Ms]),
+            info_msg([c_hi("MSGS"), ": ~p~n"] ,[Ms]),
             ?MODULE:aloop(S);
 
         {Prompt, continue = X} ->
@@ -507,22 +507,25 @@ aloop(#s{meta   = Meta,
 
         {Prompt, backtrace = X} ->
             Bt = int:meta(Meta, X, 1),
-            io:format("BT ~p~n",[Bt]),
+            info_msg("BT ~p~n",[Bt]),
             ?MODULE:aloop(S);
 
         {Prompt, interpret, Mod} ->
             int:i(Mod),
-            io:format("Interpreted modules: ~p~n",[int:interpreted()]),
+            info_msg([c_hi("Interpreted modules"), ": ~p~n"],
+                     [int:interpreted()]),
             ?MODULE:aloop(S);
 
         {Prompt, var, Var} ->
             {_Cur,_Max,Bs,_} = S#s.stack,
             case find_var(Var, Bs) of
-                [{VarName, Val}] -> io:format("~p = ~p~n",[VarName, Val]);
+                [{VarName, Val}] ->
+                    info_msg([c_hi("~p"), "= ~p~n"], [VarName, Val]);
                 [{_Var1, _Val1}|_] = Candidates ->
-                    io:format("~p ambigious prefix: ~p~n",
-                              [Var, [N || {N,_} <- Candidates]]);
-                []      -> io:format("~p not found~n",[Var])
+                    info_msg([c_hi("~p"), c_warn(" ambigious prefix"),
+                              ": ~p~n"], [Var, [N || {N,_} <- Candidates]]);
+                []      -> info_msg([c_hi("~p"), c_err(" not found"), "~n"],
+                                    [Var])
             end,
             ?MODULE:aloop(S);
 
@@ -535,20 +538,20 @@ aloop(#s{meta   = Meta,
                             {_,_,_,{Mod,_Line}} ->
                                 Fname = edbg:find_source(Mod),
                                 {ok, Defs} = pp_record:read(Fname),
-                                io:format("~p =~n~s~n",
+                                info_msg("~p =~n~s~n",
                                           [VarName,
                                            pp_record:print(Val, Defs)]);
                             _ ->
-                                io:format("No module info available...~n",[])
+                                error_msg("No module info available...~n",[])
                         end;
                     [{_Var1, _Val1}|_] = Candidates ->
-                        io:format("~p ambigious prefix: ~p~n",
+                        error_msg("~p ambigious prefix: ~p~n",
                                   [Var, [N || {N,_} <- Candidates]]);
                     []      ->
-                        io:format("~p not found~n",[Var])
+                        att_msg("~p not found~n",[Var])
                 end
             catch
-                _:_ -> io:format("Operation failed...~n",[])
+                _:_ -> error_msg("Operation failed...~n",[])
             end,
             ?MODULE:aloop(S);
 
@@ -557,7 +560,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     int:break(Mod, Line);
                 _ ->
-                    io:format("Unknown Module; no break point set~n",[])
+                    error_msg("Unknown Module; no break point set~n",[])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -567,7 +570,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     t(Mod, Line);
                 _ ->
-                    io:format("Unknown Module; no break point set~n",[])
+                    error_msg("Unknown Module; no break point set~n",[])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -577,7 +580,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     int:delete_break(Mod, Line);
                 _ ->
-                    io:format("Unknown Module; no break point deleted~n",[])
+                    error_msg("Unknown Module; no break point deleted~n",[])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -587,7 +590,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     int:disable_break(Mod, Line);
                 _ ->
-                    io:format("Unknown Module; no break point disabled~n",
+                    error_msg("Unknown Module; no break point disabled~n",
                               [])
             end,
             save_all_breakpoints(),
@@ -598,7 +601,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     int:enable_break(Mod, Line);
                 _ ->
-                    io:format("Unknown Module; no break point enabled~n",[])
+                    error_msg("Unknown Module; no break point enabled~n",[])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -638,7 +641,7 @@ aloop(#s{meta   = Meta,
             exit(normal);
 
         _X ->
-            io:format("aloop got: ~p~n",[_X]),
+            info_msg("aloop got: ~p~n",[_X]),
             ?MODULE:aloop(S)
 
     end.
@@ -664,9 +667,9 @@ evaluate(ExprStr, Bindings) ->
 
 
 print_all_breakpoints(L) ->
-    io:format("~nBREAKPOINTS~n",[]),
+    att_msg("~nBREAKPOINTS~n",[]),
     F = fun({{Mod,Line},[Status,Trigger,_,Cond]}) ->
-                io:format(" ~p:~p  Status=~p Trigger=~p Cond=~p~n",
+                info_msg(" ~p:~p  Status=~p Trigger=~p Cond=~p~n",
                           [Mod,Line,Status,Trigger,Cond])
         end,
     [F(X) || X <- L].
@@ -774,7 +777,7 @@ ploop(Apid, Prompt, PrevCmd) ->
         ["d"++_]  -> Apid ! {self(), down};
 
         _X ->
-            io:format("prompt got: ~p~n",[_X])
+            info_msg("prompt got: ~p~n",[_X])
     end,
     ?MODULE:ploop(Apid, Prompt, Cmd).
 
@@ -793,8 +796,21 @@ print_help() ->
     S4 = " (v)ar <variable> (e)val <expr> (i)nterpret <Mod>",
     S5 = " (pr)etty print record <variable> conte(x)t <Ctx>",
     S6 = " (u)p (d)own (l)ist module <Mod Line <Ctx>>",
-    io:format("~n~s~n~s~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4,S5,S6]).
-
+    S = lists:flatten(io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n",
+                                    [S1,S2,S3,S4,S5,S6])),
+    %% highligt character(s) inside parentheses
+    F = fun($), {normal, _Collect, Acc}) ->
+                {in_parentheses, [], Acc};
+           ($(, {in_parentheses, Collect, Acc}) ->
+                Hi = [$(, c_hi(Collect), $)],
+                {normal, [], [Hi | Acc]};
+           (C, {M = in_parentheses, Collect, Acc}) ->
+                {M, [C | Collect], Acc};
+           (C, {M = normal, [], Acc}) ->
+                {M, [], [C | Acc]}
+        end,
+    {_, _, Str} = lists:foldr(F, {normal, [], []}, S),
+    info_msg(Str, []).
 
 set_break(Apid, X) ->
     send_mod_line(Apid, X, set_break).
@@ -852,32 +868,32 @@ plist() ->
     %% {<0.42.0>,{sloop,init,[]},break,{sloop,19}}]
 
     lists:map(fun({Pid, {Mod,Name,Args}, break = Status, {Mod2,Line}}) ->
-                      io:format("~10.p  ~-25.s  ~-10.s  ~p:~p~n",
-                                [Pid,q(Mod,Name,length(Args)),
-                                 q(Status),Mod2,Line]);
+                      info_msg("~10.p  ~-25.s  ~-10.s  ~p:~p~n",
+                               [Pid,q(Mod,Name,length(Args)),
+                                q(Status),Mod2,Line]);
 
                  ({Pid, {Mod,Name,Args}, exit = Status, Reason}) ->
                       if (Reason =/= normal) ->
-                              io:format("~10.p  ~-25.s  ~-10.s  Reason: ~p~n",
-                                        [Pid,
-                                         q(Mod,Name,length(Args)),
-                                         q(Status),Reason]);
+                              info_msg("~10.p  ~-25.s  ~-10.s  Reason: ~p~n",
+                                       [Pid,
+                                        q(Mod,Name,length(Args)),
+                                        q(Status),Reason]);
                          true ->
                               false
                       end,
                       ok;
 
                  ({Pid, {Mod,Name,Args}, running = Status, _}) ->
-                      io:format("~10.p  ~-25.s  ~-10.s~n",
-                                [Pid,q(Mod,Name,length(Args)),q(Status)]);
+                      info_msg("~10.p  ~-25.s  ~-10.s~n",
+                               [Pid,q(Mod,Name,length(Args)),q(Status)]);
 
                  ({Pid, {Mod,Name,Args}, idle = Status, _}) ->
-                      io:format("~10.p  ~-25.s  ~-10.s~n",
-                                [Pid,q(Mod,Name,length(Args)),q(Status)]);
+                      info_msg("~10.p  ~-25.s  ~-10.s~n",
+                               [Pid,q(Mod,Name,length(Args)),q(Status)]);
 
                  ({Pid, {Mod,Name,Args}, waiting = Status, _}) ->
-                      io:format("~10.p  ~-25.s  ~-10.s~n",
-                                [Pid,q(Mod,Name,length(Args)),q(Status)])
+                      info_msg("~10.p  ~-25.s  ~-10.s~n",
+                               [Pid,q(Mod,Name,length(Args)),q(Status)])
 
               end, L),
     ok.
@@ -916,18 +932,18 @@ mod_list(Mod, Rinfo)->
     {ok, SrcBin, Fname} = erl_prim_loader:get_file(Fname),
 
     put(mod_bps, int:all_breaks(Mod)),
-    io:format("MODULE: ~p.erl~n",[Mod]),
+    info_msg([c_hi("MODULE"), ": ~p.erl~n"], [Mod]),
     lists:foldl(fun(Line,{Cur,Row,Ctx}) when Cur == Row ->
                         Fs = field_size(Row,Ctx),
-                        io:format("~"++Fs++".s> ~s~n",[i2l(Cur),b2l(Line)]),
+                        cur_line_msg("~"++Fs++".s> ~s~n",[i2l(Cur),b2l(Line)]),
                         {Cur+1,Row,Ctx};
 
                    (Line,{Cur,Row,Ctx}) when Row == -1 orelse
                                              (Cur >= (Row-Ctx) andalso
                                               Cur =< (Row+Ctx)) ->
                         Fs = field_size(Row,Ctx),
-                        io:format("~"++Fs++".s~s ~s~n",[i2l(Cur),sep(Cur),
-                                                         b2l(Line)]),
+                        info_msg("~"++Fs++".s~s ~s~n",[i2l(Cur),sep(Cur),
+                                                       b2l(Line)]),
                         {Cur+1,Row,Ctx};
 
                    (_Line,{Cur,Row,Ctx}) ->
@@ -950,7 +966,7 @@ sep(Row) ->
                 [] ->
                     ":";
                 _ ->
-                    "*"
+                    c_err("*")
             end
     end.
 
@@ -977,3 +993,24 @@ get_break_point(MyPid) ->
         _ ->
             no_break_found
     end.
+
+%%
+%% coloring
+%%
+
+color_msg(Color, Fmt, Args) when is_atom(Color) ->
+    io:format(lists:flatten(edbg_color:Color(Fmt)), Args).
+
+info_msg(Fmt, Args) -> io:format(lists:flatten(Fmt), Args).
+
+att_msg(Fmt, Args) -> color_msg(whiteb, Fmt, Args).
+
+%% warn_msg(Fmt, Args) -> color_msg(yellow, Fmt, Args).
+
+error_msg(Fmt, Args) -> color_msg(red, Fmt, Args).
+
+cur_line_msg(Fmt, Args) ->color_msg(green, Fmt, Args).
+
+c_hi(Str) -> edbg_color:whiteb(Str).
+c_warn(Str) -> edbg_color:yellow(Str).
+c_err(Str) -> edbg_color:red(Str).
