@@ -116,6 +116,7 @@ Continue the execution of a stopped process.
 Show all interpreted modules.
 
 ### edbg:delete_break(Mod,Line) | edbg:disable_break(Mod,Line) | edbg:enable_break(Mod,Line)
+### edbg:bdel(Mod,Line) | edbg:boff(Mod,Line) | edbg:bon(Mod,Line)
 Delete/Disable/Enable a break point.
 
 ### edbg:load_all_breakpoints() | edbg:lab()

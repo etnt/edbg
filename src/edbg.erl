@@ -17,8 +17,11 @@
          continue/1,
          continue/3,
          delete_break/2,
+         bdel/2,
          disable_break/2,
+         boff/2,
          enable_break/2,
+         bon/2,
          f/1,
          f/3,
          finish/1,
@@ -104,16 +107,19 @@ break(Mod, Line) ->
     save_all_breakpoints(),
     ok.
 
+bdel(Mod, Line) -> delete_break.
 delete_break(Mod, Line) ->
     ok = int:delete_break(Mod, Line),
     save_all_breakpoints(),
     ok.
 
+boff(Mod, Line) -> disable_break(Mod, Line).
 disable_break(Mod, Line) ->
     ok = int:disable_break(Mod, Line),
     save_all_breakpoints(),
     ok.
 
+bon(Mod, Line) -> enable_break(Mod, Line).
 enable_break(Mod, Line) ->
     ok = int:enable_break(Mod, Line),
     save_all_breakpoints(),
