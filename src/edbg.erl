@@ -107,7 +107,7 @@ break(Mod, Line) ->
     save_all_breakpoints(),
     ok.
 
-bdel(Mod, Line) -> delete_break.
+bdel(Mod, Line) -> delete_break(Mod, Line).
 delete_break(Mod, Line) ->
     ok = int:delete_break(Mod, Line),
     save_all_breakpoints(),
