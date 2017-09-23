@@ -296,13 +296,15 @@ code_list(Pid) ->
     end.
 
 
+-define(DEFAULT_CONTEXT_SIZE, 5).
+
 -record(s, {
           pid,
           meta,
           prompt,
           break_at,
           break_points = [],
-          context = 5,
+          context = ?DEFAULT_CONTEXT_SIZE,
           stack,
           trace = false,  % toggle
           mytracer
@@ -759,7 +761,7 @@ ploop(Apid, Prompt, PrevCmd) ->
         ["q"++_] -> Apid ! {self(), quit}, exit(normal);
         ["i"++X] -> Apid ! {self(), interpret, list_to_atom(string:strip(X))};
         ["v"++X] -> Apid ! {self(), var, list_to_atom(string:strip(X))};
-        ["x"++X] -> Apid ! {self(), context, list_to_integer(string:strip(X))};
+        ["x"++X] -> set_context(Apid, X);
         ["h"++_] -> print_help();
 
         ["ba"++_] -> Apid ! {self(), backtrace};
@@ -811,6 +813,22 @@ print_help() ->
         end,
     {_, _, Str} = lists:foldr(F, {normal, [], []}, S),
     info_msg(Str, []).
+
+set_context(Apid, X) ->
+    case string:strip(X) of
+        [] ->
+            %% Empty argument resets to default context size of five rows
+            Apid ! {self(), context, ?DEFAULT_CONTEXT_SIZE};
+
+        Arg ->
+            %% Try setting context size, notify user if bad input
+            try
+                Apid ! {self(), context, list_to_integer(Arg)}
+            catch
+                error:badarg ->
+                    info_msg("context only takes numbers~n", [])
+            end
+    end.
 
 set_break(Apid, X) ->
     send_mod_line(Apid, X, set_break).
