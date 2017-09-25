@@ -20,6 +20,17 @@
          rloop/2
         ]).
 
+%% Import color functions
+-import(edbg_color_srv,
+        [info_msg/2,
+         att_msg/2,
+         warn_msg/2,
+         err_msg/2,
+         cur_line_msg/2,
+         c_hi/1,
+         c_warn/1,
+         c_err/1,
+         help_hi/1]).
 
 -define(mytracer, mytracer).
 
@@ -123,7 +134,7 @@ rloop(Pid, Prompt) ->
         ["q"++_] -> Pid ! quit, exit(normal);
 
         _X ->
-            io:format("prompt got: ~p~n",[_X])
+            info_msg("prompt got: ~p~n",[_X])
     end,
     ?MODULE:rloop(Pid, Prompt).
 
@@ -189,7 +200,8 @@ print_help() ->
     S2 = " (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>",
     S3 = " (pr)etty print record <N> <ArgN>",
     S4 = " (p)agesize <N> (f)ind <M>:<Fx> | <RetVal> (q)uit",
-    io:format("~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4]).
+    S = io_lib:format("~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4]),
+    info_msg(help_hi(S), []).
 
 
 tstop() -> ?mytracer ! stop.
@@ -231,9 +243,9 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             dbg:stop_clear(),
             case lists:keyfind(N, 1, Buf) of
                 {_, Msg} ->
-                    io:format("~n~p~n", [Msg]);
+                    info_msg("~n~p~n", [Msg]);
                 _ ->
-                    io:format("not found~n",[])
+                    err_msg("not found~n",[])
             end,
             ?MODULE:tloop(X, Tlist ,Buf);
 
@@ -242,10 +254,10 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             case get_return_value(N, lists:reverse(Buf)) of
                 {ok, {M,F,Alen}, RetVal} ->
                     Sep = pad(35, $-),
-                    io:format("~nCall: ~p:~p/~p , return value:~n~s~n~p~n",
-                              [M,F,Alen,Sep,RetVal]);
+                    info_msg("~nCall: ~p:~p/~p , return value:~n~s~n~p~n",
+                             [M,F,Alen,Sep,RetVal]);
                 not_found ->
-                    io:format("~nNo return value found!~n",[])
+                    info_msg("~nNo return value found!~n",[])
             end,
             ?MODULE:tloop(X, Tlist ,Buf);
 
@@ -261,13 +273,13 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
                     {_,{trace, _Pid, call, {M,F,A}}} ->
                         Sep = pad(35, $-),
                         ArgStr = "argument "++integer_to_list(ArgN)++":",
-                        io:format("~nCall: ~p:~p/~p , ~s~n~s~n~p~n",
-                                  [M,F,length(A),ArgStr,Sep,lists:nth(ArgN,A)]);
+                        info_msg("~nCall: ~p:~p/~p , ~s~n~s~n~p~n",
+                                 [M,F,length(A),ArgStr,Sep,lists:nth(ArgN,A)]);
                     _ ->
-                        io:format("not found~n",[])
+                        err_msg("not found~n",[])
                 end
             catch
-                _:_ ->  io:format("not found~n",[])
+                _:_ ->  err_msg("not found~n",[])
             end,
             ?MODULE:tloop(X, Tlist ,Buf);
 
@@ -280,14 +292,14 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
                         Fname = edbg:find_source(M),
                         {ok, Defs} = pp_record:read(Fname),
                         ArgStr = "argument "++integer_to_list(ArgN)++":",
-                        io:format("~nCall: ~p:~p/~p , ~s~n~s~n~s~n",
-                                  [M,F,length(A),ArgStr,Sep,
-                                   pp_record:print(lists:nth(ArgN,A), Defs)]);
+                        info_msg("~nCall: ~p:~p/~p , ~s~n~s~n~s~n",
+                                 [M,F,length(A),ArgStr,Sep,
+                                  pp_record:print(lists:nth(ArgN,A), Defs)]);
                     _ ->
-                        io:format("not found~n",[])
+                        err_msg("not found~n",[])
                 end
             catch
-                _:_ ->  io:format("not found~n",[])
+                _:_ ->  err_msg("not found~n",[])
             end,
             ?MODULE:tloop(X, Tlist ,Buf);
 
@@ -295,7 +307,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
         {find, {Mstr,Fstr}} ->
             NewTlist = case find_mf(Tlist#tlist.at, Buf, Mstr, Fstr) of
                            not_found ->
-                               io:format("not found~n",[]),
+                               info_msg("not found~n",[]),
                                Tlist;
                            NewAt ->
                                list_trace(Tlist#tlist{at = NewAt}, Buf)
@@ -306,7 +318,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
         {find, {Mstr,Fstr},{An,Av}} ->
             NewTlist = case find_mf_av(Tlist#tlist.at,Buf,Mstr,Fstr,An,Av) of
                            not_found ->
-                               io:format("not found~n",[]),
+                               info_msg("not found~n",[]),
                                Tlist;
                            NewAt ->
                                list_trace(Tlist#tlist{at = NewAt}, Buf)
@@ -317,7 +329,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
         {find_str, Str} ->
             NewTlist = case find_retval(Tlist#tlist.at, Buf, Str) of
                            not_found ->
-                               io:format("not found~n",[]),
+                               info_msg("not found~n",[]),
                                Tlist;
                            NewAt ->
                                list_trace(Tlist#tlist{at = NewAt}, Buf)
@@ -354,8 +366,8 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
 
         {raw, N} ->
             case lists:keyfind(N, 1, Buf) of
-                {_,V} -> io:format("~p~n",[V]);
-                _     -> io:format("nothing found!~n",[])
+                {_,V} -> info_msg("~p~n",[V]);
+                _     -> info_msg("nothing found!~n",[])
             end,
             ?MODULE:tloop(X, Tlist ,Buf);
 
@@ -382,7 +394,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             end;
 
         _X ->
-            %%io:format("mytracer got: ~p~n",[_X]),
+            %%info_msg("mytracer got: ~p~n",[_X]),
             ?MODULE:tloop(X, Tlist ,Buf)
     end.
 
@@ -512,8 +524,8 @@ list_trace(Tlist, Buf) ->
                      at = At,
                      page = Page} = Z)
                 when ?inside(At,N,Page) ->
-                  io:format("~"++Fs++".s:~s ~p ~p:~p/~p~n",
-                            [integer_to_list(N),pad(Level),Pid,M,F,length(A)]),
+                  info_msg("~"++Fs++".s:~s ~p ~p:~p/~p~n",
+                           [integer_to_list(N),pad(Level),Pid,M,F,length(A)]),
                   Z#tlist{level = Level+1};
 
              ({_N,{trace, _Pid, call, {_M,_F,_A}}},
@@ -569,17 +581,18 @@ mlist(N, Buf) ->
                     {match, MatchList} ->
                         {FmtStr, Args} = mk_print_match(SrcBin, MatchList),
                         Sep = pad(35, $-),
-                        io:format("~nCall: ~p:~p/~p~n~s~n"++FmtStr++"~n~s~n",
-                                  [M,F,length(A),Sep|Args]++[Sep]);
+                        info_msg("~nCall: ~p:~p/~p~n~s~n"++FmtStr++"~n~s~n",
+                                 [M,F,length(A),Sep|Args]++[Sep]);
                     Else ->
-                        io:format("nomatch: ~p~n",[Else])
+                        info_msg("nomatch: ~p~n",[Else])
                 end;
             _ ->
-                io:format("not found~n",[])
+                info_msg("not found~n",[])
         end
     catch
         _:Err ->
-            io:format("CRASH: ~p , ~p~n",[Err,erlang:get_stacktrace()])
+            info_msg([c_err("CRASH: ~p"), " ~p~n"],
+                     [Err,erlang:get_stacktrace()])
     end.
 
 
