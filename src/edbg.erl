@@ -1,4 +1,5 @@
 -module(edbg).
+-on_load(init_edbg/0).
 
 -export([a/0,
          a/1,
@@ -66,6 +67,21 @@
          find_source/1
         ]).
 
+%% Import color functions
+-import(edbg_color_srv,
+        [info_msg/2,
+         att_msg/2,
+         warn_msg/2,
+         err_msg/2,
+         cur_line_msg/2,
+         c_hi/1,
+         c_warn/1,
+         c_err/1,
+         help_hi/1]).
+
+init_edbg() ->
+    ok = edbg_color_srv:init().
+
 lts() ->
     edbg_tracer:lts().
 
@@ -107,7 +123,7 @@ break(Mod, Line) ->
     save_all_breakpoints(),
     ok.
 
-bdel(Mod, Line) -> delete_break.
+bdel(_Mod, _Line) -> delete_break.
 delete_break(Mod, Line) ->
     ok = int:delete_break(Mod, Line),
     save_all_breakpoints(),
@@ -343,7 +359,7 @@ attach(Pid) when is_pid(Pid) ->
                      break_points = int:all_breaks(),
                      prompt=Prompt});
         Else ->
-            error_msg("Failed to attach to process: ~p~n",[Pid]),
+            err_msg("Failed to attach to process: ~p~n",[Pid]),
             Else
     end.
 
@@ -392,7 +408,7 @@ aloop(#s{meta   = Meta,
         {Meta,{exit_at, {Mod, Line}, Reason, Cur}} ->
             Bs = int:meta(Meta, bindings, nostack),
             mlist(Mod,Line,S#s.context),
-            error_msg("ERROR REASON: ~p~n",[Reason]),
+            err_msg("ERROR REASON: ~p~n",[Reason]),
             ?MODULE:aloop(S#s{break_at = {Mod,Line},
                               stack = {Cur+1,Cur+1,Bs,{Mod,Line}}});
 
@@ -407,7 +423,7 @@ aloop(#s{meta   = Meta,
                 {ok, Value} ->
                     info_msg([c_hi("EVALUATED VALUE"), ":~n~p~n"], [Value]);
                 {error, ErrStr} ->
-                    error_msg("~s~n",[ErrStr])
+                    err_msg("~s~n",[ErrStr])
             end,
             ?MODULE:aloop(S);
 
@@ -544,16 +560,16 @@ aloop(#s{meta   = Meta,
                                           [VarName,
                                            pp_record:print(Val, Defs)]);
                             _ ->
-                                error_msg("No module info available...~n",[])
+                                err_msg("No module info available...~n",[])
                         end;
                     [{_Var1, _Val1}|_] = Candidates ->
-                        error_msg("~p ambigious prefix: ~p~n",
-                                  [Var, [N || {N,_} <- Candidates]]);
+                        err_msg("~p ambigious prefix: ~p~n",
+                                [Var, [N || {N,_} <- Candidates]]);
                     []      ->
                         att_msg("~p not found~n",[Var])
                 end
             catch
-                _:_ -> error_msg("Operation failed...~n",[])
+                _:_ -> err_msg("Operation failed...~n",[])
             end,
             ?MODULE:aloop(S);
 
@@ -562,7 +578,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     int:break(Mod, Line);
                 _ ->
-                    error_msg("Unknown Module; no break point set~n",[])
+                    err_msg("Unknown Module; no break point set~n",[])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -572,7 +588,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     t(Mod, Line);
                 _ ->
-                    error_msg("Unknown Module; no break point set~n",[])
+                    err_msg("Unknown Module; no break point set~n",[])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -582,7 +598,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     int:delete_break(Mod, Line);
                 _ ->
-                    error_msg("Unknown Module; no break point deleted~n",[])
+                    err_msg("Unknown Module; no break point deleted~n",[])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -592,8 +608,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     int:disable_break(Mod, Line);
                 _ ->
-                    error_msg("Unknown Module; no break point disabled~n",
-                              [])
+                    err_msg("Unknown Module; no break point disabled~n", [])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -603,7 +618,7 @@ aloop(#s{meta   = Meta,
                 {Mod,_} ->
                     int:enable_break(Mod, Line);
                 _ ->
-                    error_msg("Unknown Module; no break point enabled~n",[])
+                     err_msg("Unknown Module; no break point enabled~n", [])
             end,
             save_all_breakpoints(),
             ?MODULE:aloop(S);
@@ -798,21 +813,8 @@ print_help() ->
     S4 = " (v)ar <variable> (e)val <expr> (i)nterpret <Mod>",
     S5 = " (pr)etty print record <variable> conte(x)t <Ctx>",
     S6 = " (u)p (d)own (l)ist module <Mod Line <Ctx>>",
-    S = lists:flatten(io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n",
-                                    [S1,S2,S3,S4,S5,S6])),
-    %% highligt character(s) inside parentheses
-    F = fun($), {normal, _Collect, Acc}) ->
-                {in_parentheses, [], Acc};
-           ($(, {in_parentheses, Collect, Acc}) ->
-                Hi = [$(, c_hi(Collect), $)],
-                {normal, [], [Hi | Acc]};
-           (C, {M = in_parentheses, Collect, Acc}) ->
-                {M, [C | Collect], Acc};
-           (C, {M = normal, [], Acc}) ->
-                {M, [], [C | Acc]}
-        end,
-    {_, _, Str} = lists:foldr(F, {normal, [], []}, S),
-    info_msg(Str, []).
+    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n", [S1,S2,S3,S4,S5,S6]),
+    info_msg(help_hi(S), []).
 
 set_context(Apid, X) ->
     case string:strip(X) of
@@ -1011,24 +1013,3 @@ get_break_point(MyPid) ->
         _ ->
             no_break_found
     end.
-
-%%
-%% coloring
-%%
-
-color_msg(Color, Fmt, Args) when is_atom(Color) ->
-    io:format(lists:flatten(edbg_color:Color(Fmt)), Args).
-
-info_msg(Fmt, Args) -> io:format(lists:flatten(Fmt), Args).
-
-att_msg(Fmt, Args) -> color_msg(whiteb, Fmt, Args).
-
-%% warn_msg(Fmt, Args) -> color_msg(yellow, Fmt, Args).
-
-error_msg(Fmt, Args) -> color_msg(red, Fmt, Args).
-
-cur_line_msg(Fmt, Args) ->color_msg(green, Fmt, Args).
-
-c_hi(Str) -> edbg_color:whiteb(Str).
-c_warn(Str) -> edbg_color:yellow(Str).
-c_err(Str) -> edbg_color:red(Str).
