@@ -575,7 +575,7 @@ mlist(N, Buf) ->
                 LF = atom_to_list(F),
                 Src = binary_to_list(SrcBin),
                 %% '.*?' ::= ungreedy match!
-                RegExp = "\\n"++LF++".*?->",
+                RegExp = "\\n"++LF++"\\(.*?->",
                 %% 'dotall' ::= allow multiline function headers
                 case re:run(Src, RegExp, [global,dotall,report_errors]) of
                     {match, MatchList} ->
