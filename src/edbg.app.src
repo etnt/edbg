@@ -1,0 +1,15 @@
+{application, edbg,
+ [{description, "TTY interface to the Erlang debugger and tracer"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+  {mod, {edbg_app, []}},
+  {maintainers, []},
+  {licenses, []},
+  {links, []}
+ ]}.
