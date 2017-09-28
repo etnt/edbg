@@ -31,7 +31,7 @@ deps:
 pp_record-dep:
 	if [ ! -d deps/pp_record ]; then \
 	  cd deps; \
-	  git clone https://github.com/bet365/pp_record.git; \
+	  git clone https://github.com/etnt/pp_record.git; \
 	  make -C pp_record all; \
 	fi
 
