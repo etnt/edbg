@@ -535,7 +535,7 @@ list_trace(Tlist, Buf) ->
              %% R E T U R N _ F R O M
              ({_N,{trace, _Pid, return_from, _MFA, _Value}},
               #tlist{level = Level} = Z) ->
-                  Z#tlist{level = Level-1}
+                  Z#tlist{level = erlang:max(Level-1,0)}
 
           end, Tlist#tlist{level = 0}, Buf),
 
