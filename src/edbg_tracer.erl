@@ -199,8 +199,9 @@ print_help() ->
     S1 = " (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom",
     S2 = " (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>",
     S3 = " (pr)etty print record <N> <ArgN>",
-    S4 = " (p)agesize <N> (f)ind <M>:<Fx> | <RetVal> (q)uit",
-    S = io_lib:format("~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4]),
+    S4 = " (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>",
+    S5 = " (p)agesize <N> (q)uit",
+    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4,S5]),
     info_msg(help_hi(S), []).
 
 
