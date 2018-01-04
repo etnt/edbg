@@ -436,7 +436,7 @@ find_mf_av(At, Buf, Mstr, Fstr, An, Av) ->
                   case lists:prefix(Fstr, atom_to_list(F)) of
                       true ->
                           ArgStr = lists:flatten(io_lib:format("~p",[lists:nth(An,A)])),
-                          try re:run(Av, ArgStr) of
+                          try re:run(ArgStr,Av) of
                               nomatch -> true;
                               _       -> false
                           catch
