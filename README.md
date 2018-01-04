@@ -8,7 +8,7 @@ A tty based interface to the Erlang debugger and tracer.
 3. [Debug Usage](#dbg-usage)
 4. [Trace Usage](#trace-usage)
 5. [Debug examples](#dbg-examples)
-6.. [Trace examples](#trace-examples)
+6. [Trace examples](#trace-examples)
 
 Useful if you, for example, work from home but still
 want to debug your code at your work desktop, or if you
