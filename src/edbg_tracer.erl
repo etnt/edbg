@@ -549,6 +549,8 @@ get_return_value(N, [{I,_}|T]) when I < N ->
 get_return_value(N, [{N,{trace, _Pid, call, {M,F,A}}}|T]) ->
     find_return_value({M,F,length(A)}, T);
 get_return_value(N, [{I,_}|_]) when I > N ->
+    not_found;
+get_return_value(_, []) ->
     not_found.
 
 find_return_value(MFA, T) ->
