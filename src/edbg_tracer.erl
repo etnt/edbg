@@ -1,6 +1,7 @@
 -module(edbg_tracer).
 
--export([start_my_tracer/0,
+-export([file/1,
+         start_my_tracer/0,
          send/2,
          tlist/0,
          tmax/1,
@@ -65,6 +66,16 @@ start_my_tracer() ->
 %%                       end, 0}).
 %%dbg:p(all,clear).
 %%dbg:p(all,[c]).
+
+file(Fname) ->
+    case file:read_file(Fname) of
+        {ok, Tdata} ->
+            %% We expect Tdata to be a list of trace tuples as
+            %% a binary in the external term form.
+            call(start_my_tracer(), {load_trace_data, binary_to_term(Tdata)});
+        Error ->
+            Error
+    end.
 
 tstart() ->
     start_my_tracer().
@@ -379,6 +390,10 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
         quit ->
             dbg:stop_clear(),
             exit(quit);
+
+        {From, {load_trace_data, TraceData}} ->
+            From ! {self(), ok},
+            ?MODULE:tloop(X, Tlist ,TraceData);
 
         {From, {start, Start, Opts}} ->
             TraceSetupMod = get_trace_setup_mod(Opts),
