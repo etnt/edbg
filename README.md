@@ -30,6 +30,13 @@ The edbg tracing functionality is (hopefully) a somewhat more novel approach.
      to your ~/.erlang file.
 ```
 
+NOTE: The coloring code makes use of 'maps', so in case of an
+older Erlang system where 'maps' isn't supported, you must compile
+the code as:
+```
+   env USE_COLORS=false make
+```
+
 <a name="color"></a>
 ## CUSTOM COLOR
 Custom colors may be set using the environment variable EDBG_COLOR.

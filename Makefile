@@ -1,13 +1,23 @@
 SHELL := /bin/bash
 
 ERLC=erlc
-ERLC_FLAGS= +debug_info +compressed
+USE_COLORS ?= USE_COLORS
+ERLC_FLAGS= +debug_info +compressed -D$(USE_COLORS)
 
 BEAM=$(patsubst %.erl,%.beam,$(wildcard src/*.erl))
 TBEAM=$(patsubst %.erl,%.beam,$(wildcard test/*.erl))
 
+# To disable color: env USE_COLORS=false make
+# Ugly as hell, but wtf...
+ifeq "$(USE_COLORS)" "USE_COLORS"
+BEAM_OBJS=$(BEAM)
+else
+BEAM_OBJS=src/edbg.beam src/edbg_tracer.beam src/edbg_trace_filter.beam
+#BEAM_OBJS=$(filter-out *color*, $(BEAM))
+endif
 
-all: get-deps $(BEAM)
+
+all: get-deps $(BEAM_OBJS)
 test: $(TBEAM)
 .PHONY: all test
 
