@@ -172,7 +172,7 @@ will load and set those breakpoints found in this file.
 ## TRACE USAGE
 The `fstart` functions is a newer interface which is using the
 Erlang trace BIFs directly (i.e not using the dbg.erl module).
-The also store the trace output on file so that it survives
+They also store the trace output on file so that it survives
 the initial session where the tracing took place.
 
 ### edbg:fstart(ModFunList, Opts)
