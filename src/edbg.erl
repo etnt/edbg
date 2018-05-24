@@ -22,7 +22,11 @@
          disable_break/2,
          boff/2,
          enable_break/2,
+         file/0,
          file/1,
+         fstart/0,
+         fstart/1,
+         fstart/2,
          bon/2,
          f/1,
          f/3,
@@ -101,8 +105,20 @@ init_edbg() ->
 lts() ->
     edbg_tracer:lts().
 
+file() ->
+    edbg_tracer:file().
+
 file(Fname) ->
     edbg_tracer:file(Fname).
+
+fstart() ->
+    edbg_tracer:fstart().
+
+fstart(ModFunList) ->
+    edbg_tracer:fstart(ModFunList).
+
+fstart(ModFunList, Options) ->
+    edbg_tracer:fstart(ModFunList, Options).
 
 tquit() ->
     edbg_tracer:tquit().

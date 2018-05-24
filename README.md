@@ -170,8 +170,56 @@ will load and set those breakpoints found in this file.
 
 <a name="trace-usage"></a>
 ## TRACE USAGE
+The `fstart` functions is a newer interface which is using the
+Erlang trace BIFs directly (i.e not using the dbg.erl module).
+The also store the trace output on file so that it survives
+the initial session where the tracing took place.
+
+### edbg:fstart(ModFunList, Opts)
+Start tracing to file. `ModFunList` is a list of module names (atoms)
+or tuples {ModuleName, FunctionName}. This makes it possible to trace
+on all functions within a Module, or just a few functions within a Module.
+
+`Opts` is a list of option tuples:
+
+* {log_file, FileName} : file where to store trace output; default: `edbg.trace_result`
+* {max_msgs, MaxNumOfMsgs} : max number of trace messages; default = 1000
+* {trace_time, Seconds} : max time to trace; default = 10 seconds
+* {trace_spec, Spec} : see the erlang:trace/3 docs; default = processes
+
+Tracing in an Erlang node is setup by the `erlang:trace/3` and
+`erlang:trace_pattern/3` BIFs`. The generated trace output in
+a production system can quickly produce a staggering amount of
+data, which easily can swamp the whole system, so that it becomes
+unusable.
+
+It is therefore important to restrict what to trace, the amount of
+generated trace messages and the maximum time we allow tracing to go on.
+`edbg` helps you with this but you can still brake
+your system if you are careless setting the trace parameters.
+
+With the `max_msgs` and `trace_time` parameters you can
+restrict the amount of generated trace messages and running time
+before stopping the tracing.
+
+The `trace_spec` is also a way of restricting what to trace on.
+For more info about this, see the erlang:trace/3 documentation.
+
+### edbg:fstart(ModFunList)
+As edbg:fstart/2 but using no Options.
+
+### edbg:fstart()
+Resuse the last setup from edbg:fstart/[1,2].
+
+### edbg:file(LogFileName)
+Load the trace output from the file `LogFileName` and
+enter the trace list mode.
+
+### edbg:file()
+As edbg:file/1 but use the default trace output filename.
 
 ### edbg:tstart(Mod, Mods [,Opts])
+This is an older and obsoleted interface for starting the tracing.
 Start tracing the first time `Mod` (an atom) is called, in any process,
 and in any spawned process from such a process.
 Do also trace any call to the modules `Mods` (list of atoms).

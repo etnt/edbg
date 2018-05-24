@@ -1,18 +1,37 @@
 -module(edbg_tracer).
 
--export([file/1,
-         start_my_tracer/0,
-         send/2,
-         tlist/0,
-         tmax/1,
-         traw/1,
-         tquit/0,
-         lts/0,
-         tstart/0,
-         tstart/1,
-         tstart/2,
-         tstart/3,
-         tstop/0
+-export([file/0
+         , file/1
+         , fstart/0
+         , fstart/1
+         , fstart/2
+         , lts/0
+         , send/2
+         , start_my_tracer/0
+         , tlist/0
+         , tmax/1
+         , tquit/0
+         , traw/1
+         , tstart/0
+         , tstart/1
+         , tstart/2
+         , tstart/3
+         , tstop/0
+        ]).
+
+-import(edbg_file_tracer,
+        [add_mf_f/1
+         , fname/2
+         , get_config/0
+         , log_file_f/1
+         , max_msgs_f/1
+         , mname/2
+         , new_mf/0
+         , set_config/2
+         , start_trace/0
+         , stop_trace/0
+         , trace_spec_f/1
+         , trace_time_f/1
         ]).
 
 %% Internal export
@@ -81,15 +100,61 @@ start_my_tracer() ->
 %%dbg:p(all,clear).
 %%dbg:p(all,[c]).
 
+%% @doc Enter trace list mode based on given trace file.
+file() ->
+    file("./edbg.trace_result").
+
 file(Fname) ->
+    stop_trace(),
+    catch edbg_file_tracer:stop(),
     case file:read_file(Fname) of
         {ok, Tdata} ->
             %% We expect Tdata to be a list of trace tuples as
             %% a binary in the external term form.
-            call(start_my_tracer(), {load_trace_data, binary_to_term(Tdata)});
+            call(start_my_tracer(), {load_trace_data, binary_to_term(Tdata)}),
+            tlist();
         Error ->
             Error
     end.
+
+%% @doc Start tracing to file.
+fstart() ->
+    edbg_file_tracer:start(),
+    edbg_file_tracer:load_config(),
+    start_trace().
+
+fstart(ModFunList) ->
+    fstart(ModFunList, []).
+
+fstart(ModFunList, Options)
+  when is_list(ModFunList) andalso
+       is_list(Options) ->
+    edbg_file_tracer:start(),
+    MF  = new_mf(),
+    MFs = lists:foldr(fun({Mname,Fname}, Acc) ->
+                              [add_mf_f(fname(mname(MF, Mname), Fname))|Acc];
+                         (Mname, Acc) when is_atom(Mname) ->
+                              [add_mf_f(mname(MF, Mname))|Acc];
+                         (X, Acc) ->
+                              io:format("Ignoring ModFun: ~p~n",[X]),
+                              Acc
+                      end, [], ModFunList),
+
+    Opts = lists:foldr(fun({log_file, Lname}, Acc) ->
+                               [log_file_f(Lname)|Acc];
+                          ({max_msgs, Max}, Acc) ->
+                               [max_msgs_f(Max)|Acc];
+                          ({trace_time, Time}, Acc) ->
+                               [trace_time_f(Time)|Acc];
+                          ({trace_spec, Spec}, Acc) ->
+                               [trace_spec_f(Spec)|Acc];
+                          (X, Acc) ->
+                               io:format("Ignoring Option: ~p~n",[X]),
+                               Acc
+                       end, [], Options),
+
+    set_config(MFs++Opts, get_config()),
+    start_trace().
 
 tstart() ->
     start_my_tracer().
