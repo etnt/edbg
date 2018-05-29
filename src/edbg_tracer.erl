@@ -107,7 +107,7 @@ file() ->
 file(Fname) ->
     stop_trace(),
     catch edbg_file_tracer:stop(),
-    case file:read_file(Fname) of
+    try file:read_file(Fname) of
         {ok, Tdata} ->
             %% We expect Tdata to be a list of trace tuples as
             %% a binary in the external term form.
@@ -115,6 +115,9 @@ file(Fname) ->
             tlist();
         Error ->
             Error
+    catch
+        _:Err ->
+            {error, Err}
     end.
 
 %% @doc Start tracing to file.

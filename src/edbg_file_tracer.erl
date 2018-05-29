@@ -240,8 +240,13 @@ save_config(X, CfgFile) ->
     end.
 
 get_file_config(CfgFile) ->
-    {ok,[X]} = file:consult(CfgFile),
-    X.
+    try
+        {ok,[X]} = file:consult(CfgFile),
+        X
+    catch
+        _:_ ->
+            #state{}
+    end.
 
 
 start_tracer(State0) ->
