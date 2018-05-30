@@ -96,12 +96,10 @@ stop() ->
     gen_server:stop(?SERVER).
 
 start_trace() ->
-    gen_server:cast(?SERVER, start_trace),
-    ok.
+    call(start_trace).
 
 stop_trace() ->
-    gen_server:cast(?SERVER, stop_trace),
-    ok.
+    call(stop_trace).
 
 get_config() ->
     call(get_config).
@@ -183,22 +181,15 @@ handle_call(load_config, _From, _State) ->
     Reply = ok,
     {reply, Reply, State};
 
-handle_call(_Req, _From, State) ->
-    Reply = error,
-    {reply, Reply, State}.
-
-
-%%--------------------------------------------------------------------
-
-handle_cast(start_trace, #state{tracer = Pid, trace_time = Time} = State)
+handle_call(start_trace, _From, #state{tracer = Pid, trace_time = Time} = State)
   when not(is_pid(Pid)) ->
     Tracer = start_tracer(State),
     ?log("Starting Tracer(~p)...~n",[Tracer]),
     timer:apply_after(timer:seconds(Time),gen_server,cast,[?SERVER,stop_dbg]),
     ?log("Tracer started: ~p", [Tracer]),
-    {noreply, State#state{tracer = Tracer}};
+    {reply, ok, State#state{tracer = Tracer}};
 
-handle_cast(stop_trace, #state{tracer = Tracer} = State)
+handle_call(stop_trace, _From, #state{tracer = Tracer} = State)
   when is_pid(Tracer) ->
     ?log("Stopping Tracer(~p)...~n",[Tracer]),
     Ref = erlang:trace_delivered(all),
@@ -211,7 +202,14 @@ handle_cast(stop_trace, #state{tracer = Tracer} = State)
         {'EXIT', Tracer, _} -> ok
     end,
     ?log("Server(~p): stopping Tracer(~p)...DONE~n",[self(), Tracer]),
-    {noreply, State#state{tracer = undefined}};
+    {reply, ok, State#state{tracer = undefined}};
+
+handle_call(_Req, _From, State) ->
+    Reply = error,
+    {reply, Reply, State}.
+
+
+%%--------------------------------------------------------------------
 
 handle_cast(_Msg, State) ->
     ?log("Got unexpected cast: ~p", [_Msg]),

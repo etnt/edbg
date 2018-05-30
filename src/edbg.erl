@@ -27,6 +27,7 @@
          fstart/0,
          fstart/1,
          fstart/2,
+         fstop/0,
          bon/2,
          f/1,
          f/3,
@@ -119,6 +120,9 @@ fstart(ModFunList) ->
 
 fstart(ModFunList, Options) ->
     edbg_tracer:fstart(ModFunList, Options).
+
+fstop() ->
+    edbg_tracer:fstop().
 
 tquit() ->
     edbg_tracer:tquit().

@@ -173,7 +173,8 @@ will load and set those breakpoints found in this file.
 The `fstart` functions is a newer interface which is using the
 Erlang trace BIFs directly (i.e not using the dbg.erl module).
 They also store the trace output on file so that it survives
-the initial session where the tracing took place.
+the initial session where the tracing took place (which can
+be good if called from within a Common-Test test case or similar).
 
 ### edbg:fstart(ModFunList, Opts)
 Start tracing to file. `ModFunList` is a list of module names (atoms)
@@ -228,6 +229,9 @@ enter the trace list mode.
 
 ### edbg:file()
 As edbg:file/1 but use the default trace output filename.
+
+### edbg:fstop()
+Stop tracing and dump the trace output to file.
 
 ### edbg:tstart(Mod, Mods [,Opts])
 This is an older and obsoleted interface for starting the tracing.

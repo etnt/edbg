@@ -5,6 +5,7 @@
          , fstart/0
          , fstart/1
          , fstart/2
+         , fstop/0
          , lts/0
          , send/2
          , start_my_tracer/0
@@ -107,7 +108,7 @@ file() ->
     file("./edbg.trace_result").
 
 file(Fname) ->
-    stop_trace(),
+    catch stop_trace(),
     catch edbg_file_tracer:stop(),
     try file:read_file(Fname) of
         {ok, Tdata} ->
@@ -165,6 +166,11 @@ fstart(ModFunList, Options)
 
     set_config(MFs++Opts, get_config()),
     start_trace().
+
+fstop() ->
+    edbg_file_tracer:stop_trace(),
+    edbg_file_tracer:stop().
+
 
 tstart() ->
     start_my_tracer().
