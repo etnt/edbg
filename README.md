@@ -186,6 +186,8 @@ on all functions within a Module, or just a few functions within a Module.
 * {max_msgs, MaxNumOfMsgs} : max number of trace messages; default = 1000
 * {trace_time, Seconds} : max time to trace; default = 10 seconds
 * {trace_spec, Spec} : see the erlang:trace/3 docs; default = processes
+* dump_output_eager : trace output goes to file often
+* dump_output_lazy : trace output goes to file not so often (default)
 
 Tracing in an Erlang node is setup by the `erlang:trace/3` and
 `erlang:trace_pattern/3` BIFs`. The generated trace output in
@@ -204,6 +206,15 @@ before stopping the tracing.
 
 The `trace_spec` is also a way of restricting what to trace on.
 For more info about this, see the erlang:trace/3 documentation.
+
+With the `dump_output_lazy` switch set, trace output goes to file not
+until the tracer is stopped (e.g by calling the file/1 function), or
+that a limiting filter such as max_msg or trace_time is reached.
+This is the default.
+
+With the `dump_output_eager` switch set, trace output goes to file often
+which may be necessary if you run edbg tracing and the system goes down.
+
 
 ### edbg:fstart(ModFunList)
 As edbg:fstart/2 but using no Options.

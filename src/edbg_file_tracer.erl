@@ -26,6 +26,8 @@
 
 %% API
 -export([add_mf_f/1
+         , dump_output_eager_f/0
+         , dump_output_lazy_f/0
          , fname/2
          , get_config/0
          , load_config/0
@@ -73,6 +75,8 @@
           modules = []  :: [#m{}],
           which_pid = all,  % all | first
 
+          dump_output = false :: boolean(),
+
           tracer  :: pid(),
           srv_pid :: pid()
          }).
@@ -114,6 +118,12 @@ set_config(Funs, State)
 log_file_f(LogFile)
   when is_list(LogFile) ->
     fun(State) -> State#state{log_file = LogFile} end.
+
+dump_output_lazy_f() ->
+    fun(State) -> State#state{dump_output = false} end.
+
+dump_output_eager_f() ->
+    fun(State) -> State#state{dump_output = true} end.
 
 max_msgs_f(Max)
   when is_integer(Max) andalso Max >= 0 ->
@@ -276,20 +286,23 @@ tloop(#state{srv_pid = SrvPid, trace_spec = TraceSpec} = State, N, Tmsgs) ->
             ?log("Tracer(~p): max reached, stopping N=~p ...~n", [self(),NewN]),
             %% Max amount of trace msgs; stop tracing!
             erlang:trace(TraceSpec,false,[call,procs,{tracer,self()}]),
-            dump_tmsgs(State, NewTmsgs),
+            dump_tmsgs(State#state{dump_output = true}, NewTmsgs),
             exit(max_msgs);
 
         {_, {From, stop}} ->
             ?log("Tracer(~p): stopping N=~p ...~n", [self(),NewN]),
             erlang:trace(TraceSpec,false,[call,procs,{tracer,self()}]),
-            dump_tmsgs(State, Tmsgs),
+            dump_tmsgs(State#state{dump_output = true}, Tmsgs),
             From ! {self(), stopped},
             exit(normal);
 
        _ ->
+            dump_tmsgs(State, NewTmsgs),
             tloop(State, NewN, NewTmsgs)
     end.
 
+dump_tmsgs(#state{dump_output = false}, _Tmsgs) ->
+    ok;
 dump_tmsgs(#state{log_file = Fname}, Tmsgs) ->
     ok = file:write_file(Fname,term_to_binary(Tmsgs)).
 
@@ -338,13 +351,13 @@ recv_all_traces(SrvPid, Suspended0, Traces, Timeout) ->
             recv_all_traces(SrvPid, Suspended, [Trace|Traces], 0);
 
         {_From, stop} = Msg ->
-            {Suspended0, Traces, Msg};
+            {Suspended0, lists:reverse(Traces), Msg};
 
         _Other ->
             recv_all_traces(SrvPid, Suspended0, Traces, 0)
 
     after Timeout ->
-            {Suspended0, Traces, false}
+            {Suspended0, lists:reverse(Traces), false}
     end.
 
 

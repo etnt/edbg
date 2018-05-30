@@ -21,6 +21,8 @@
 
 -import(edbg_file_tracer,
         [add_mf_f/1
+         , dump_output_eager_f/0
+         , dump_output_lazy_f/0
          , fname/2
          , get_config/0
          , log_file_f/1
@@ -111,7 +113,8 @@ file(Fname) ->
         {ok, Tdata} ->
             %% We expect Tdata to be a list of trace tuples as
             %% a binary in the external term form.
-            call(start_my_tracer(), {load_trace_data, binary_to_term(Tdata)}),
+            call(start_my_tracer(), {load_trace_data,
+                                     binary_to_term(Tdata)}),
             tlist();
         Error ->
             Error
@@ -151,6 +154,10 @@ fstart(ModFunList, Options)
                                [trace_time_f(Time)|Acc];
                           ({trace_spec, Spec}, Acc) ->
                                [trace_spec_f(Spec)|Acc];
+                          (dump_output_lazy, Acc) ->
+                               [dump_output_lazy_f()|Acc];
+                          (dump_output_eager, Acc) ->
+                               [dump_output_eager_f()|Acc];
                           (X, Acc) ->
                                io:format("Ignoring Option: ~p~n",[X]),
                                Acc
