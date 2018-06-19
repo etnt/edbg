@@ -206,6 +206,8 @@ restrict the amount of generated trace messages and running time
 before stopping the tracing.
 
 The `trace_spec` is also a way of restricting what to trace on.
+Default is `all`, but for later OTP versions (> 18.3): `processes`
+is available and would be more specific.
 For more info about this, see the erlang:trace/3 documentation.
 
 With the `dump_output_lazy` switch set, trace output goes to file not
@@ -604,39 +606,45 @@ Here is an example of an interactively defined conditional break point
 <a name="trace-examples"></a>
 ## TRACE EXAMPLES
 ```erlang
-   # WE WANT TO START TRACING THE FIRST TIME WE ENTER THE 'yaws_server'
-   # MODULE, FOR ANY PROCESS. WE WILL ALSO TRACE CALLS TO SOME OTHER
-   # Yaws MODULES
-   1> edbg:tstart(yaws_server,[yaws,yaws_config,yaws_log]).
-   started
+   # TRACE THE SPECIFIED MODULES BELOW.
+   # THE TRACE OUTPUT WILL BE STORED ON FILE.
+   1> edbg:fstart([yaws_server,yaws,yaws_config],[{max_msgs,10000}]).
+   ok
 
-   # NOW RUN THE TEST...
+   # NOW RUN A CALL TOWARD YAWS !!
 
-   # WHEN THE TEST IS FINISHED WE LIST THE TRACE OUTPUT:
-   2> edbg:tlist().
+   2> edbg:fstop().
+   ok
+
+   # WE RELY ON USING THE DEFAULT FILENAME, HENCE NO NEED TO
+   # SPECIFY IT HERE WHEN LOADING THE TRACE INFO.
+   3> edbg:file().
 
     (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
     (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
-    (p)agesize <N> (f)ind <M>:<Fx> | <RetVal> (q)uit
-      0: <0.536.0> yaws_server:gserv_loop/4
-      1:  <0.537.0> yaws_server:peername/2
-      3:  <0.536.0> yaws_server:close_accepted_if_max/2
-      5:  <0.536.0> yaws_server:acceptor/1
-      7:  <0.536.0> yaws_server:gserv_loop/4
-      8:   <0.648.0> yaws_server:acceptor0/2
-      9:    <0.648.0> yaws_server:do_accept/1
-     10:     <0.537.0> yaws_server:aloop/4
-     11:      <0.537.0> yaws_server:init_db/0
-     13:      <0.537.0> yaws:http_get_headers/2
-     14:       <0.537.0> yaws:do_http_get_headers/2
-     15:        <0.537.0> yaws:http_recv_request/2
-     16:         <0.537.0> yaws:setopts/3
-     18:         <0.537.0> yaws:do_recv/3
+    (pr)etty print record <N> <ArgN>
+    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
+    (p)agesize <N> (q)uit
+     0: <0.255.0> yaws_server:gserv_loop/4
+     1:  <0.258.0> yaws_server:gserv_loop/4
+     2:   <0.233.0> yaws:month/1
+     4:   <0.259.0> yaws_server:peername/2
+     6:   <0.258.0> yaws_server:close_accepted_if_max/2
+     8:   <0.258.0> yaws_server:acceptor/1
+    10:   <0.258.0> yaws_server:gserv_loop/4
+    11:    <0.281.0> yaws_server:acceptor0/2
+    12:     <0.281.0> yaws_server:do_accept/1
+    13:      <0.259.0> yaws_server:aloop/4
+    14:       <0.259.0> yaws_server:init_db/0
+    16:       <0.259.0> yaws:http_get_headers/2
+    17:        <0.259.0> yaws:do_http_get_headers/2
+    18:         <0.259.0> yaws:http_recv_request/2
+    19:          <0.259.0> yaws:setopts/3
 
    # TO INSPECT A PARTICULAR CALL (without drowning in output),
    # WE USE THE (s)how COMMAND WHICH WILL DISPLAY THE FUNCTION
    # CLAUSE HEADS IN ORDER TO HELP US DECIDE WHICH ARGUMENT TO INSPECT.
-   tlist> s 1
+   tlist> s 4
 
    Call: yaws_server:peername/2
    -----------------------------------
@@ -647,44 +655,66 @@ Here is an example of an interactively defined conditional break point
 
    -----------------------------------
 
-   # TO INSPECT THE SECOND ARGUMENT OF A CALL:
-   tlist> s 1 2
+   # SHOW WHAT THE SECOND ARGUMENT CONTAINED
+   tlist> s 4 2
 
    Call: yaws_server:peername/2 , argument 2:
    -----------------------------------
    nossl
 
-   # TO INSPECT THE RETURN VALUE
-   tlist> r 1
+   # WHAT DID THE FUNCTION CALL RETURN?
+   tlist> r 4
 
    Call: yaws_server:peername/2 , return value:
    -----------------------------------
-   {{127,0,0,1},56123}
+   {{127,0,0,1},35871}
 
    # IF WE KNOW THE ARGUMENT TO BE A RECORD, WE CAN PRETTY PRINT IT
-   tlist> s 173
+   tlist> s 177
 
-   Call: yaws_server:handle_normal_request/5
+   Call: yaws_server:handle_request/3
    -----------------------------------
 
-   handle_normal_request(CliSock, ARG, UT = #urltype{type=error}, _, N) ->
+   handle_request(CliSock, ARG, _N)
+     when is_record(ARG#arg.state, rewrite_response) ->
 
-   handle_normal_request(CliSock, ARG, UT, Authdirs, N) ->
+   handle_request(CliSock, ARG, N) ->
 
    -----------------------------------
+   tlist> s 177 2
 
-   tlist> pr 173 2
-
-   Call: yaws_server:handle_normal_request/5 , argument 2:
+   Call: yaws_server:handle_request/3 , argument 2:
    -----------------------------------
-   #arg{clisock = #Port<0.10952>,
-        client_ip_port = {{127,0,0,1},59557},
+   {arg,#Port<0.6886>,
+        {{127,0,0,1},35871},
+        {headers,undefined,"*/*","localhost:8008",undefined,undefined,undefined,
+                 undefined,undefined,undefined,undefined,"curl/7.35.0",undefined,
+                 [],undefined,undefined,undefined,undefined,undefined,
+                 {"admin","admin","Basic YWRtaW46YWRtaW4="},
+                 undefined,undefined,[]},
+        ....
+
+   tlist> pr 177 2
+
+   Call: yaws_server:handle_request/3 , argument 2:
+   -----------------------------------
+   #arg{clisock = #Port<0.6886>,
+        client_ip_port = {{127,0,0,1},35871},
         headers = #headers{connection = undefined,accept = "*/*",
-                           host = "localhost:8080",
-                           if_modified_since = undefined,
+                           host = "localhost:8008",if_modified_since = undefined,
                            if_match = undefined,if_none_match = undefined,
-      ....
-
+                           if_range = undefined,if_unmodified_since = undefined,
+                           range = undefined,referer = undefined,
+                           user_agent = "curl/7.35.0",accept_ranges = undefined,
+                           cookie = [],keep_alive = undefined,location = undefined,
+                           content_length = undefined,content_type = undefined,
+                           content_encoding = undefined,
+                           authorization = {"admin","admin","Basic YWRtaW46YWRtaW4="},
+                           transfer_encoding = undefined,x_forwarded_for = undefined,
+                           other = []},
+        req = #http_request{method = 'GET',
+                            path = {abs_path,"/restconf/data"},
+       ....
 
    # HERE IS AN EXAMPLE OF HOW WE CAN SEARCH FOR PARTICULAR
    # FUNCTION CALL THAT WE ARE INTERESTED IN.

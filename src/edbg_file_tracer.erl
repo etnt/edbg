@@ -71,7 +71,7 @@
           log_file = "./edbg.trace_result",
           max_msgs = ?DEFAULT_MAX_MSGS,
           trace_time = ?DEFAULT_TRACE_TIME,
-          trace_spec = processes,
+          trace_spec = all,
           modules = []  :: [#m{}],
           which_pid = all,  % all | first
 
