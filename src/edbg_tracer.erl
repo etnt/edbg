@@ -74,7 +74,7 @@
 -define(inside(At,Cur,Page), ((Cur >=At) andalso (Cur =< (At+Page)))).
 
 -record(tlist, {
-          level = 0,
+          level = maps:new(),  % Key=<pid> , Val=<level>
           at = 1,
           current = 1,
           page = 20
@@ -631,24 +631,27 @@ list_trace(Tlist, Buf) ->
 
           %% C A L L
           fun({N,{trace, Pid, call, {M,F,A}}},
-              #tlist{level = Level,
+              #tlist{level = LevelMap,
                      at = At,
                      page = Page} = Z)
                 when ?inside(At,N,Page) ->
+                  Level = maps:get(Pid, LevelMap, 0),
                   ?info_msg("~"++Fs++".s:~s ~p ~p:~p/~p~n",
                            [integer_to_list(N),pad(Level),Pid,M,F,length(A)]),
-                  Z#tlist{level = Level+1};
+                  Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
 
-             ({_N,{trace, _Pid, call, {_M,_F,_A}}},
-              #tlist{level = Level} = Z) ->
-                  Z#tlist{level = Level+1};
+             ({_N,{trace, Pid, call, {_M,_F,_A}}},
+              #tlist{level = LevelMap} = Z) ->
+                  Level = maps:get(Pid, LevelMap, 0),
+                  Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
 
              %% R E T U R N _ F R O M
-             ({_N,{trace, _Pid, return_from, _MFA, _Value}},
-              #tlist{level = Level} = Z) ->
-                  Z#tlist{level = erlang:max(Level-1,0)}
+             ({_N,{trace, Pid, return_from, _MFA, _Value}},
+              #tlist{level = LevelMap} = Z) ->
+                  Level = maps:get(Pid, LevelMap, 0),
+                  Z#tlist{level = maps:put(Pid,erlang:max(Level-1,0),LevelMap)}
 
-          end, Tlist#tlist{level = 0}, Buf),
+          end, Tlist#tlist{level = maps:new()}, Buf),
 
     NewAt = Tlist#tlist.at + Tlist#tlist.page + 1,
     Zlist#tlist{at = NewAt}.
