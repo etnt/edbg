@@ -31,7 +31,10 @@ clean:
 # D E P E N D E N C I E S
 # -----------------------
 .PHONY: get-deps deps pp_record-dep
-get-deps: deps pp_record-dep
+get-deps: rebar3 deps pp_record-dep
+
+rebar3:
+	wget https://s3.amazonaws.com/rebar3/rebar3 && chmod +x rebar3
 
 deps:
 	if [ ! -d deps ]; then \
