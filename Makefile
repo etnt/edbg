@@ -45,8 +45,9 @@ pp_record-dep:
 	if [ ! -d deps/pp_record ]; then \
 	  cd deps; \
 	  git clone https://github.com/etnt/pp_record.git; \
+	  cp ../rebar3 pp_record; \
 	  make -C pp_record all; \
 	fi
 
 rm-deps:
-	rm -rf deps
+	rm -rf deps rebar3
