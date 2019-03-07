@@ -76,8 +76,10 @@ Colors not specified in EDBG_COLOR will keep their defaults.
 <a name="dbg-usage"></a>
 ## DEBUG USAGE
 
-### edbg:i(Mod, Line)
+### edbg:i(Mod, Line) | edbg:i(Mod)
 Start interpret module `Mod` and set a break point at line `Line`.
+With only one argument, you don't set an explicit break point,
+but you will be able to step into the module while debugging.
 
 ### edbg:b(Mod, Line) | edbg:break(Mod, Line)
 Set a break point in `Mod` at line `Line`.
