@@ -188,7 +188,7 @@ on all functions within a Module, or just a few functions within a Module.
 * {log_file, FileName} : file where to store trace output; default: `edbg.trace_result`
 * {max_msgs, MaxNumOfMsgs} : max number of trace messages; default = 1000
 * {trace_time, Seconds} : max time to trace; default = 10 seconds
-* {trace_spec, Spec} : see the erlang:trace/3 docs; default = processes
+* {trace_spec, Spec} : see the erlang:trace/3 docs; default = all
 * dump_output_eager : trace output goes to file often
 * dump_output_lazy : trace output goes to file not so often (default)
 
@@ -220,6 +220,17 @@ This is the default.
 With the `dump_output_eager` switch set, trace output goes to file often
 which may be necessary if you run edbg tracing and the system goes down.
 
+```erlang
+   % Example, trace calls to the foo module, no more than 1000 trace msgs
+   edbg:fstart([foo], [{max_msgs, 1000}]).
+```
+
+```erlang
+   % Example, trace all modules in a particular process,
+   % dump the traced output to file often,
+   % no more than 1000 trace msgs.
+   edbg:fstart([], [{trace_spec,Pid}, dump_output_eager, {max_msgs, 1000}]).
+```
 
 ### edbg:fstart(ModFunList)
 As edbg:fstart/2 but using no Options.

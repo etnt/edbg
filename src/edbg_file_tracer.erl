@@ -132,7 +132,7 @@ trace_time_f(Time)
     fun(State) -> State#state{trace_time = Time} end.
 
 trace_spec_f(Spec)
-  when is_atom(Spec) ->
+  when is_atom(Spec) orelse is_pid(Spec) ->
     fun(State) -> State#state{trace_spec = Spec} end.
 
 add_mf_f(M)
@@ -264,10 +264,16 @@ start_tracer(State0) ->
 
 run_tracer(#state{modules = Modules, trace_spec = TraceSpec} = State) ->
 
-    %% Setup which Modules we want to do call-trace on.
-    [code:ensure_loaded(M#m.mname) || M <- Modules],
-    [erlang:trace_pattern({M,F,'_'},[{'_',[],[{return_trace}]}],[local])
-     || #m{mname=M, fname=F} <- Modules],
+    if length(Modules) > 0 ->
+            %% Setup which Modules we want to do call-trace on.
+            [code:ensure_loaded(M#m.mname) || M <- Modules],
+            [erlang:trace_pattern({M,F,'_'},[{'_',[],[{return_trace}]}],[local])
+             || #m{mname=M, fname=F} <- Modules];
+       true ->
+            erlang:trace_pattern({'_','_','_'},
+                                 [{'_',[],[{return_trace}]}],
+                                 [local])
+    end,
 
     %% Start tracing!
     erlang:trace(TraceSpec, true, [call,procs,{tracer,self()}]),
