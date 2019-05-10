@@ -191,6 +191,7 @@ on all functions within a Module, or just a few functions within a Module.
 * {trace_spec, Spec} : see the erlang:trace/3 docs; default = all
 * dump_output_eager : trace output goes to file often
 * dump_output_lazy : trace output goes to file not so often (default)
+* monotonic_ts : show the elapsed monotonic nano seconds
 
 Tracing in an Erlang node is setup by the `erlang:trace/3` and
 `erlang:trace_pattern/3` BIFs`. The generated trace output in
@@ -219,6 +220,11 @@ This is the default.
 
 With the `dump_output_eager` switch set, trace output goes to file often
 which may be necessary if you run edbg tracing and the system goes down.
+
+With the `monotonic_ts` switch set, each trace message will have a
+monotonic timestamp, in nanoseconds, attached to it. This will be displayed
+in the call graph as the elapsed time counted from the first received
+trace message.
 
 ```erlang
    % Example, trace calls to the foo module, no more than 1000 trace msgs
@@ -768,3 +774,42 @@ Here is an example of an interactively defined conditional break point
    -----------------------------------
    ["Allow: GET, POST, OPTIONS, HEAD\r\n"]
  ```
+
+By using the option 'monotonic_ts', we will also see the
+elapsed monotonic time, in nano seconds, from the first
+received trace message.
+
+```erlang
+   # BY ADDING THE OPTION 'monotonic_ts' WHEN STARTING
+   # THE TRACE; WE WILL SEE THE ELAPSED NANO SECONDS FOR
+   # EACH CALL, COUNTED FROM THE FIRST TRACED CALL.
+   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,10000},
+                                                 monotonic_ts]).
+   ok
+   (confd@hedlund)2> edbg:fstop().
+   ok
+   (confd@hedlund)3> edbg:file().
+
+    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
+    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
+    (pr)etty print record <N> <ArgN>
+    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
+    (p)agesize <N> (q)uit
+      0: <0.297.0> yaws_server:peername/2 - 0
+      2: <0.296.0> yaws_server:close_accepted_if_max/2 - 37276
+      4: <0.296.0> yaws_server:acceptor/1 - 46436
+      6: <0.296.0> yaws_server:gserv_loop/4 - 72287
+      7: <0.315.0> yaws_server:acceptor0/2 - 104797
+      8:  <0.315.0> yaws_server:do_accept/1 - 110475
+      9: <0.297.0> yaws_server:aloop/4 - 142479
+     10:  <0.297.0> yaws_server:init_db/0 - 164453
+     12:  <0.297.0> yaws_server:fix_abs_uri/2 - 216505
+     14:  <0.297.0> yaws_server:pick_sconf/4 - 220942
+     15:   <0.297.0> yaws_server:pick_sconf/3 - 225815
+     16:    <0.297.0> yaws_server:pick_host/4 - 230099
+     17:     <0.297.0> yaws_server:comp_sname/2 - 235914
+     18:      <0.297.0> yaws_server:comp_sname/2 - 238042
+     19:       <0.297.0> yaws_server:comp_sname/2 - 239546
+     20:        <0.297.0> yaws_server:comp_sname/2 - 240632
+   tlist>
+```

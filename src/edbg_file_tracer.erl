@@ -34,6 +34,7 @@
          , log_file_f/1
          , max_msgs_f/1
          , mname/2
+         , monotonic_ts_f/0
          , new_mf/0
          , set_config/2
          , start/0
@@ -78,7 +79,9 @@
           dump_output = false :: boolean(),
 
           tracer  :: pid(),
-          srv_pid :: pid()
+          srv_pid :: pid(),
+
+          monotonic_ts = false  % use the 'monotonoc_timestamp' trace option
          }).
 
 %%% --------------------------------------------------------------------
@@ -122,6 +125,9 @@ dump_output_lazy_f() ->
 
 dump_output_eager_f() ->
     fun(State) -> State#state{dump_output = true} end.
+
+monotonic_ts_f() ->
+    fun(State) -> State#state{monotonic_ts = true} end.
 
 max_msgs_f(Max)
   when is_integer(Max) andalso Max >= 0 ->
@@ -276,7 +282,8 @@ run_tracer(#state{modules = Modules, trace_spec = TraceSpec} = State) ->
     end,
 
     %% Start tracing!
-    erlang:trace(TraceSpec, true, [call,procs,{tracer,self()}]),
+    erlang:trace(TraceSpec,true,
+                 [call,procs,{tracer,self()}] ++ monotonic_ts(State)),
     tloop(State, 0, []).
 
 tloop(#state{srv_pid = SrvPid, trace_spec = TraceSpec} = State, N, Tmsgs) ->
@@ -289,13 +296,15 @@ tloop(#state{srv_pid = SrvPid, trace_spec = TraceSpec} = State, N, Tmsgs) ->
         {true, _} ->
             ?log("Tracer(~p): max reached, stopping N=~p ...~n", [self(),NewN]),
             %% Max amount of trace msgs; stop tracing!
-            erlang:trace(TraceSpec,false,[call,procs,{tracer,self()}]),
+            erlang:trace(TraceSpec,false,
+                         [call,procs,{tracer,self()}] ++ monotonic_ts(State)),
             dump_tmsgs(State#state{dump_output = true}, NewTmsgs),
             exit(max_msgs);
 
         {_, {From, stop}} ->
             ?log("Tracer(~p): stopping N=~p ...~n", [self(),NewN]),
-            erlang:trace(TraceSpec,false,[call,procs,{tracer,self()}]),
+            erlang:trace(TraceSpec,false,
+                         [call,procs,{tracer,self()}] ++ monotonic_ts(State)),
             dump_tmsgs(State#state{dump_output = true}, Tmsgs),
             From ! {self(), stopped},
             exit(normal);
@@ -304,6 +313,9 @@ tloop(#state{srv_pid = SrvPid, trace_spec = TraceSpec} = State, N, Tmsgs) ->
             dump_tmsgs(State, NewTmsgs),
             tloop(State, NewN, NewTmsgs)
     end.
+
+monotonic_ts(#state{monotonic_ts = true}) -> [monotonic_timestamp];
+monotonic_ts(_State)                      -> [].
 
 dump_tmsgs(#state{dump_output = false}, _Tmsgs) ->
     ok;
@@ -349,7 +361,8 @@ recv_all_traces(SrvPid) ->
 recv_all_traces(SrvPid, Suspended0, Traces, Timeout) ->
     receive
         Trace when is_tuple(Trace) andalso
-                   element(1, Trace) == trace andalso
+                   (element(1, Trace) == trace orelse
+                    element(1, Trace) == trace_ts) andalso
                    element(2, Trace) =/= SrvPid ->
             Suspended = suspend(Trace, Suspended0),
             recv_all_traces(SrvPid, Suspended, [Trace|Traces], 0);

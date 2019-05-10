@@ -29,6 +29,7 @@
          , log_file_f/1
          , max_msgs_f/1
          , mname/2
+         , monotonic_ts_f/0
          , new_mf/0
          , set_config/2
          , start_trace/0
@@ -159,6 +160,8 @@ fstart(ModFunList, Options)
                                [dump_output_lazy_f()|Acc];
                           (dump_output_eager, Acc) ->
                                [dump_output_eager_f()|Acc];
+                          (monotonic_ts, Acc) ->
+                               [monotonic_ts_f()|Acc];
                           (X, Acc) ->
                                io:format("Ignoring Option: ~p~n",[X]),
                                Acc
@@ -377,11 +380,12 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             dbg:stop_clear(),
             try
                 case lists:keyfind(N, 1, Buf) of
-                    {_,{trace, _Pid, call, {M,F,A}}} ->
-                        Sep = pad(35, $-),
-                        ArgStr = "argument "++integer_to_list(ArgN)++":",
-                        ?info_msg("~nCall: ~p:~p/~p , ~s~n~s~n~p~n",
-                                 [M,F,length(A),ArgStr,Sep,lists:nth(ArgN,A)]);
+                    {_,{trace, _Pid, call, MFA}} ->
+                        show_arg(ArgN, MFA);
+
+                    {_,{trace_ts, _Pid, call, MFA, _TS}} ->
+                        show_arg(ArgN, MFA);
+
                     _ ->
                         ?err_msg("not found~n",[])
                 end
@@ -394,19 +398,18 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             dbg:stop_clear(),
             try
                 case lists:keyfind(N, 1, Buf) of
-                    {_,{trace, _Pid, call, {M,F,A}}} ->
-                        Sep = pad(35, $-),
-                        Fname = edbg:find_source(M),
-                        {ok, Defs} = pp_record:read(Fname),
-                        ArgStr = "argument "++integer_to_list(ArgN)++":",
-                        ?info_msg("~nCall: ~p:~p/~p , ~s~n~s~n~s~n",
-                                 [M,F,length(A),ArgStr,Sep,
-                                  pp_record:print(lists:nth(ArgN,A), Defs)]);
+                    {_,{trace, _Pid, call, MFA}} ->
+                        show_rec(ArgN, MFA);
+
+                    {_,{trace_ts, _Pid, call, MFA, _TS}} ->
+                        show_rec(ArgN, MFA);
+
                     _ ->
                         ?err_msg("not found~n",[])
                 end
             catch
-                _:_ ->  ?err_msg("not found~n",[])
+                _:_ ->
+                    ?err_msg("not found~n",[])
             end,
             ?MODULE:tloop(X, Tlist ,Buf);
 
@@ -509,6 +512,21 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist ,Buf)
     end.
 
+show_arg(ArgN, {M,F,A}) ->
+    Sep = pad(35, $-),
+    ArgStr = "argument "++integer_to_list(ArgN)++":",
+    ?info_msg("~nCall: ~p:~p/~p , ~s~n~s~n~p~n",
+              [M,F,length(A),ArgStr,Sep,lists:nth(ArgN,A)]).
+
+show_rec(ArgN, {M,F,A}) ->
+    Sep = pad(35, $-),
+    Fname = edbg:find_source(M),
+    {ok, Defs} = pp_record:read(Fname),
+    ArgStr = "argument "++integer_to_list(ArgN)++":",
+    ?info_msg("~nCall: ~p:~p/~p , ~s~n~s~n~s~n",
+              [M,F,length(A),ArgStr,Sep,
+               pp_record:print(lists:nth(ArgN,A), Defs)]).
+
 
 find_mf(At, Buf, Mstr, Fstr) ->
     Mod = list_to_atom(Mstr),
@@ -522,7 +540,12 @@ find_mf(At, Buf, Mstr, Fstr) ->
           fun({_N,{trace,_Pid,call,{M,_,_}}}) when M == Mod andalso
                                                    Fstr == "" ->
                   false;
+             ({_N,{trace_ts,_Pid,call,{M,_,_},_TS}}) when M == Mod andalso
+                                                          Fstr == "" ->
+                  false;
              ({_N,{trace,_Pid,call,{M,F,_}}}) when M == Mod ->
+                  not(lists:prefix(Fstr, atom_to_list(F)));
+             ({_N,{trace_ts,_Pid,call,{M,F,_},_TS}}) when M == Mod ->
                   not(lists:prefix(Fstr, atom_to_list(F)));
              (_) ->
                   true
@@ -543,18 +566,10 @@ find_mf_av(At, Buf, Mstr, Fstr, An, Av) ->
     R = lists:dropwhile(
           fun({_N,{trace,_Pid,call,{M,F,A}}}) when M == Mod andalso
                                                    length(A) >= An ->
-                  case lists:prefix(Fstr, atom_to_list(F)) of
-                      true ->
-                          ArgStr = lists:flatten(io_lib:format("~p",[lists:nth(An,A)])),
-                          try re:run(ArgStr,Av) of
-                              nomatch -> true;
-                              _       -> false
-                          catch
-                              _:_ -> true
-                          end;
-                      _ ->
-                          true
-                  end;
+                  do_find_mf_av(Fstr, An, Av, F, A);
+             ({_N,{trace_ts,_Pid,call,{M,F,A},_TS}}) when M == Mod andalso
+                                                          length(A) >= An ->
+                  do_find_mf_av(Fstr, An, Av, F, A);
              (_) ->
                   true
           end, lists:reverse(L)),
@@ -563,23 +578,43 @@ find_mf_av(At, Buf, Mstr, Fstr, An, Av) ->
         _         -> not_found
     end.
 
+do_find_mf_av(Fstr, An, Av, F, A) ->
+    case lists:prefix(Fstr, atom_to_list(F)) of
+        true ->
+            ArgStr = lists:flatten(io_lib:format("~p",[lists:nth(An,A)])),
+            try re:run(ArgStr,Av) of
+                nomatch -> true;
+                _       -> false
+            catch
+                _:_ -> true
+            end;
+        _ ->
+            true
+    end.
+
+get_buf_at(At, Buf) ->
+    lists:takewhile(
+      fun({N,_}) when N>=At -> true;
+         (_)                -> false
+      end, Buf).
+
+get_buf_before_at(At, Buf) ->
+    lists:dropwhile(
+      fun({N,_}) when N>=At -> true;
+         (_)                -> false
+      end, Buf).
+
+
 find_retval(At, Buf, Str) ->
     %% First get the set of trace messages to investigate
-    L = lists:takewhile(
-          fun({N,_}) when N>=At -> true;
-             (_)                -> false
-          end, Buf),
+    L = get_buf_at(At, Buf),
     %% Discard non-matching return values
     try
         lists:foldl(
-          fun({_N,{trace,_Pid,return_from, _MFA, Value}}=X,Acc) ->
-                  ValStr = lists:flatten(io_lib:format("~p",[Value])),
-                  try re:run(ValStr, Str) of
-                      nomatch -> [X|Acc];
-                      _       -> find_matching_call(Acc, 0)
-                  catch
-                      _:_ -> [X|Acc]
-                  end;
+          fun({N,{trace,_Pid,return_from, MFA, Value}}=X,_Acc) ->
+                  do_find_retval(N, Str, Value, X, MFA, Buf);
+             ({N,{trace_ts,_Pid,return_from, MFA, Value, _TS}}=X,_Acc) ->
+                  do_find_retval(N, Str, Value, X, MFA, Buf);
              (X, Acc) ->
                   [X|Acc]
           end, [], lists:reverse(L)),
@@ -589,13 +624,43 @@ find_retval(At, Buf, Str) ->
         _:_                         -> not_found
     end.
 
+do_find_retval(At, Str, Value, X, MFA, Buf) ->
+    L = get_buf_before_at(At, Buf),
+    ValStr = lists:flatten(io_lib:format("~p",[Value])),
+    try re:run(ValStr, Str) of
+        nomatch -> [X|Buf];
+        _       -> find_matching_call(MFA, L, 0)
+    catch
+        _:_ -> [X|Buf]
+    end.
+
+%% X = {Trace(_ts), Pid, CallOrReturnFrom, MFA, ...}
+-define(m(X), element(1,element(4,X))).
+-define(f(X), element(2,element(4,X))).
+-define(a(X), element(3,element(4,X))).
+-define(l(X), length(element(3,element(4,X)))).
+
 %% Will throw exception at success; crash if nothing is found!
-find_matching_call([{_N,Trace}=X|_], 0) when element(3, Trace) == call ->
+find_matching_call({M,F,A}, [{_N,Trace}=X|_], 0)
+  when element(3, Trace) == call andalso
+       ?m(Trace) == M andalso
+       ?f(Trace) == F andalso
+       ?l(Trace) == A ->
     throw({matching_call,X});
-find_matching_call([{_N,Trace}|L], N) when element(3, Trace) == call ->
-    find_matching_call(L, N-1);
-find_matching_call([{_N,Trace}|L], N) when element(3, Trace) == return_from ->
-    find_matching_call(L, N+1).
+find_matching_call({M,F,A}=MFA, [{_N,Trace}|L], N)
+  when element(3, Trace) == call andalso
+       ?m(Trace) == M andalso
+       ?f(Trace) == F andalso
+       ?l(Trace) == A ->
+    find_matching_call(MFA, L, N-1);
+find_matching_call({M,F,A}=MFA, [{_N,Trace}|L], N)
+  when element(3, Trace) == return_from andalso
+       ?m(Trace) == M andalso
+       ?f(Trace) == F andalso
+       ?a(Trace) == A ->
+    find_matching_call(MFA, L, N+1);
+find_matching_call(MFA, [{_N,_Trace}|L], N) ->
+    find_matching_call(MFA, L, N).
 
 
 get_trace_setup_mod(Opts) ->
@@ -625,6 +690,7 @@ field_size(_) ->
     "1". % shouldn't happen...
 
 list_trace(Tlist, Buf) ->
+    maybe_put_first_timestamp(Buf),
     Fs = field_size(Buf),
     Zlist =
         lists:foldr(
@@ -640,13 +706,34 @@ list_trace(Tlist, Buf) ->
                            [integer_to_list(N),pad(Level),Pid,M,F,length(A)]),
                   Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
 
+             ({N,{trace_ts, Pid, call, {M,F,A}, TS}},
+              #tlist{level = LevelMap,
+                     at = At,
+                     page = Page} = Z)
+                when ?inside(At,N,Page) ->
+                  Level = maps:get(Pid, LevelMap, 0),
+                  ?info_msg("~"++Fs++".s:~s ~p ~p:~p/~p - ~p~n",
+                           [integer_to_list(N),pad(Level),Pid,M,F,length(A),
+                            xts(TS)]),
+                  Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
+
              ({_N,{trace, Pid, call, {_M,_F,_A}}},
+              #tlist{level = LevelMap} = Z) ->
+                  Level = maps:get(Pid, LevelMap, 0),
+                  Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
+
+             ({_N,{trace_ts, Pid, call, {_M,_F,_A}, _TS}},
               #tlist{level = LevelMap} = Z) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
 
              %% R E T U R N _ F R O M
              ({_N,{trace, Pid, return_from, _MFA, _Value}},
+              #tlist{level = LevelMap} = Z) ->
+                  Level = maps:get(Pid, LevelMap, 0),
+                  Z#tlist{level = maps:put(Pid,erlang:max(Level-1,0),LevelMap)};
+
+             ({_N,{trace_ts, Pid, return_from, _MFA, _Value, _TS}},
               #tlist{level = LevelMap} = Z) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   Z#tlist{level = maps:put(Pid,erlang:max(Level-1,0),LevelMap)}
@@ -657,9 +744,46 @@ list_trace(Tlist, Buf) ->
     Zlist#tlist{at = NewAt}.
 
 
+%% Elapsed monotonic time since first trace message
+xts(TS) ->
+    case get(first_monotonic_timestamp) of
+        undefined ->
+            0;
+        XTS ->
+            TS - XTS
+    end.
+
+maybe_put_first_timestamp(Buf) ->
+    case get(first_monotonic_timestamp) of
+        undefined ->
+            case Buf of
+                [{_N,{trace_ts, _Pid, call, _MFA, _TS}}|_] ->
+                    put(first_monotonic_timestamp,
+                        get_first_monotonic_timestamp(Buf));
+                [{_N,{trace_ts, _Pid, return_from, _MFA, _Value, _TS}}|_] ->
+                    put(first_monotonic_timestamp,
+                        get_first_monotonic_timestamp(Buf));
+                _ ->
+                    undefined
+            end;
+        TS ->
+            TS
+    end.
+
+get_first_monotonic_timestamp(Buf) ->
+    case lists:reverse(Buf) of
+        [{_N,{trace_ts, _Pid, call, _MFA, TS}}|_] ->
+            TS;
+        [{_N,{trace_ts, _Pid, return_from, _MFA, _Value, TS}}|_] ->
+            TS
+    end.
+
+
 get_return_value(N, [{I,_}|T]) when I < N ->
     get_return_value(N, T);
 get_return_value(N, [{N,{trace, _Pid, call, {M,F,A}}}|T]) ->
+    find_return_value({M,F,length(A)}, T);
+get_return_value(N, [{N,{trace_ts, _Pid, call, {M,F,A}, _TS}}|T]) ->
     find_return_value({M,F,length(A)}, T);
 get_return_value(N, [{I,_}|_]) when I > N ->
     not_found;
@@ -671,7 +795,12 @@ find_return_value(MFA, T) ->
 
 find_return_value(MFA, [{_,{trace,_Pid,return_from,MFA,Val}}|_], 0 = _Depth) ->
     {ok, MFA, Val};
+find_return_value(MFA, [{_,{trace_ts,_Pid,return_from,MFA,Val,_TS}}|_], 0 = _Depth) ->
+    {ok, MFA, Val};
 find_return_value(MFA, [{_,{trace,_Pid,return_from,MFA,_}}|T], Depth)
+  when Depth > 0 ->
+    find_return_value(MFA, T, Depth-1);
+find_return_value(MFA, [{_,{trace_ts,_Pid,return_from,MFA,_,_TS}}|T], Depth)
   when Depth > 0 ->
     find_return_value(MFA, T, Depth-1);
 find_return_value(MFA, [{_,{trace, _Pid, call, MFA}}|T], Depth) ->
@@ -685,23 +814,12 @@ find_return_value(_MFA, [], _Depth) ->
 mlist(N, Buf) ->
     try
         case lists:keyfind(N, 1, Buf) of
-            {_,{trace, _Pid, call, {M,F,A}}} ->
-                Fname = edbg:find_source(M),
-                {ok, SrcBin, Fname} = erl_prim_loader:get_file(Fname),
-                LF = atom_to_list(F),
-                Src = binary_to_list(SrcBin),
-                %% '.*?' ::= ungreedy match!
-                RegExp = "\\n"++LF++"\\(.*?->",
-                %% 'dotall' ::= allow multiline function headers
-                case re:run(Src, RegExp, [global,dotall,report_errors]) of
-                    {match, MatchList} ->
-                        {FmtStr, Args} = mk_print_match(SrcBin, MatchList),
-                        Sep = pad(35, $-),
-                        ?info_msg("~nCall: ~p:~p/~p~n~s~n"++FmtStr++"~n~s~n",
-                                 [M,F,length(A),Sep|Args]++[Sep]);
-                    Else ->
-                        ?info_msg("nomatch: ~p~n",[Else])
-                end;
+            {_,{trace, _Pid, call, MFA}} ->
+                do_mlist(MFA);
+
+            {_,{trace_ts, _Pid, call, MFA, _TS}} ->
+                do_mlist(MFA);
+
             _ ->
                 ?info_msg("not found~n",[])
         end
@@ -709,6 +827,24 @@ mlist(N, Buf) ->
         _:Err ->
             ?info_msg(?c_err("CRASH: ~p") ++ " ~p~n",
                      [Err,erlang:get_stacktrace()])
+    end.
+
+do_mlist({M,F,A}) ->
+    Fname = edbg:find_source(M),
+    {ok, SrcBin, Fname} = erl_prim_loader:get_file(Fname),
+    LF = atom_to_list(F),
+    Src = binary_to_list(SrcBin),
+    %% '.*?' ::= ungreedy match!
+    RegExp = "\\n"++LF++"\\(.*?->",
+    %% 'dotall' ::= allow multiline function headers
+    case re:run(Src, RegExp, [global,dotall,report_errors]) of
+        {match, MatchList} ->
+            {FmtStr, Args} = mk_print_match(SrcBin, MatchList),
+            Sep = pad(35, $-),
+            ?info_msg("~nCall: ~p:~p/~p~n~s~n"++FmtStr++"~n~s~n",
+                      [M,F,length(A),Sep|Args]++[Sep]);
+        Else ->
+            ?info_msg("nomatch: ~p~n",[Else])
     end.
 
 
