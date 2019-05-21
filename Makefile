@@ -16,27 +16,31 @@ BEAM_OBJS=src/edbg.beam src/edbg_tracer.beam src/edbg_trace_filter.beam
 #BEAM_OBJS=$(filter-out *color*, $(BEAM))
 endif
 
-
-all: get-deps $(BEAM_OBJS)
+.PHONY: all old test clean
+all: rebar3 compile
+old: get-deps $(BEAM_OBJS)
 test: $(TBEAM)
-.PHONY: all test
 
 %.beam: %.erl
 	$(ERLC) $(ERLC_FLAGS) -o ebin $<
 
 clean:
 	rm -f ebin/*.beam
+	./rebar3 clean --all
 
 # -----------------------
 # D E P E N D E N C I E S
 # -----------------------
-.PHONY: get-deps deps pp_record-dep
-get-deps: rebar3 deps pp_record-dep
+.PHONY: compile get-deps old_deps pp_record-dep
+compile:
+	./rebar3 compile
+
+get-deps: rebar3 old_deps pp_record-dep
 
 rebar3:
 	wget https://s3.amazonaws.com/rebar3/rebar3 && chmod +x rebar3
 
-deps:
+old_deps:
 	if [ ! -d deps ]; then \
 	  mkdir deps; \
 	fi

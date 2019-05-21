@@ -25,8 +25,8 @@ The edbg tracing functionality is (hopefully) a somewhat more novel approach.
 ## INSTALL
 ```
    Run: make
-   Add: code:add_path("YOUR-PATH-HERE/edbg/ebin").
-   Add: code:add_path("YOUR-PATH-HERE/edbg/deps/pp_record/_build/default/lib/pp_record/ebin").
+   Add: code:add_path("YOUR-PATH-HERE/edbg/_build/default/lib/edbg/ebin").
+   Add: code:add_path("YOUR-PATH-HERE/edbg/_build/default/lib/pp_record/ebin").
      to your ~/.erlang file.
 ```
 
