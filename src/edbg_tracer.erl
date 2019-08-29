@@ -31,6 +31,7 @@
          , mname/2
          , monotonic_ts_f/0
          , new_mf/0
+         , send_receive_f/0
          , set_config/2
          , start_trace/0
          , stop_trace/0
@@ -78,7 +79,8 @@
           level = maps:new(),  % Key=<pid> , Val=<level>
           at = 1,
           current = 1,
-          page = 20
+          page = 20,
+          send_receive = true  % do (not) show send/receive msgs
          }).
 
 
@@ -162,6 +164,8 @@ fstart(ModFunList, Options)
                                [dump_output_eager_f()|Acc];
                           (monotonic_ts, Acc) ->
                                [monotonic_ts_f()|Acc];
+                          (send_receive, Acc) ->
+                               [send_receive_f()|Acc];
                           (X, Acc) ->
                                io:format("Ignoring Option: ~p~n",[X]),
                                Acc
@@ -240,6 +244,8 @@ rloop(Pid, Prompt) ->
         ["pr"++X]-> show_record(?mytracer, X);
         ["p"++X] -> set_page(?mytracer, X);
         ["h"++_] -> print_help();
+        ["on"++X]-> on(?mytracer, X);
+        ["off"++X]-> off(?mytracer, X);
         ["q"++_] -> Pid ! quit, exit(normal);
 
         _X ->
@@ -270,6 +276,21 @@ find(Pid, X) ->
         _:_ -> false
     end.
 
+on(Pid, X) ->
+    case string:strip(X) of
+        "send_receive" ->
+            Pid ! {on, send_receive};
+        _ ->
+            false
+    end.
+
+off(Pid, X) ->
+    case string:strip(X) of
+        "send_receive" ->
+            Pid ! {off, send_receive};
+        _ ->
+            false
+    end.
 
 show(Pid, X) ->
     parse_integers(Pid, X, show).
@@ -309,8 +330,9 @@ print_help() ->
     S2 = " (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>",
     S3 = " (pr)etty print record <N> <ArgN>",
     S4 = " (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>",
-    S5 = " (p)agesize <N> (q)uit",
-    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4,S5]),
+    S5 = " (on)/(off) send_receive",
+    S6 = " (p)agesize <N> (q)uit",
+    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4,S5,S6]),
     ?info_msg(?help_hi(S), []).
 
 
@@ -454,6 +476,14 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             {N,_} = hd(Buf),
             NewTlist = list_trace(Tlist#tlist{at = N}, Buf),
             ?MODULE:tloop(X, NewTlist, Buf);
+
+        {on, send_receive} ->
+            ?info_msg("turning on display of send/receive messages~n",[]),
+            ?MODULE:tloop(X, Tlist#tlist{send_receive = true}, Buf);
+
+        {off, send_receive} ->
+            ?info_msg("turning off display of send/receive messages~n",[]),
+            ?MODULE:tloop(X, Tlist#tlist{send_receive = false}, Buf);
 
         at ->
             NewAt = erlang:max(0, Tlist#tlist.at - Tlist#tlist.page - 1),
@@ -736,13 +766,49 @@ list_trace(Tlist, Buf) ->
              ({_N,{trace_ts, Pid, return_from, _MFA, _Value, _TS}},
               #tlist{level = LevelMap} = Z) ->
                   Level = maps:get(Pid, LevelMap, 0),
-                  Z#tlist{level = maps:put(Pid,erlang:max(Level-1,0),LevelMap)}
+                  Z#tlist{level = maps:put(Pid,erlang:max(Level-1,0),LevelMap)};
+
+             %% S E N D
+             ({N,{trace, FromPid, send, Msg, ToPid}},
+              #tlist{send_receive = true,
+                     level = LevelMap,
+                     at = At,
+                     page = Page} = Z)
+                when ?inside(At,N,Page) ->
+                  Level = maps:get(FromPid, LevelMap, 0),
+                  ?info_msg("~"++Fs++".s:~s >>> Send(~p) -> To(~p)  ~s~n",
+                            [integer_to_list(N),pad(Level),
+                             FromPid,ToPid,truncate(Msg)]),
+                  Z;
+             ({_N,{trace, _FromPid, send, _Msg, _ToPid}}, Z) ->
+                  Z;
+
+             %% R E C E I V E
+             ({N,{trace, ToPid, 'receive', Msg}},
+              #tlist{send_receive = true,
+                     level = LevelMap,
+                     at = At,
+                     page = Page} = Z)
+                when ?inside(At,N,Page) ->
+                  Level = maps:get(ToPid, LevelMap, 0),
+                  ?info_msg("~"++Fs++".s:~s <<< Receive(~p)  ~s~n",
+                            [integer_to_list(N),pad(Level),
+                             ToPid,truncate(Msg)]),
+                  Z;
+             ({_N,{trace, _ToPid, 'receive', _Msg}}, Z) ->
+                  Z
 
           end, Tlist#tlist{level = maps:new()}, Buf),
 
     NewAt = Tlist#tlist.at + Tlist#tlist.page + 1,
     Zlist#tlist{at = NewAt}.
 
+
+truncate(Term) ->
+    truncate(Term, 20).
+
+truncate(Term, Length) ->
+    string:slice(io_lib:format("~p",[Term]), 0, Length)++"...".
 
 %% Elapsed monotonic time since first trace message
 xts(TS) ->
@@ -820,6 +886,12 @@ mlist(N, Buf) ->
             {_,{trace_ts, _Pid, call, MFA, _TS}} ->
                 do_mlist(MFA);
 
+            {_,{trace, SendPid, send, Msg, ToPid}} ->
+                show_send_msg(SendPid, ToPid, Msg);
+
+            {_,{trace, RecvPid, 'receive', Msg}} ->
+                show_recv_msg(RecvPid, Msg);
+
             _ ->
                 ?info_msg("not found~n",[])
         end
@@ -828,6 +900,15 @@ mlist(N, Buf) ->
             ?info_msg(?c_err("CRASH: ~p") ++ " ~p~n",
                      [Err,erlang:get_stacktrace()])
     end.
+
+show_send_msg(SendPid, ToPid, Msg) ->
+    ?info_msg("~nMessage sent by: ~p  to: ~p~n~p~n",
+                      [SendPid,ToPid,Msg]).
+
+show_recv_msg(RecvPid, Msg) ->
+    ?info_msg("~nMessage received by: ~p~n~p~n",
+                      [RecvPid,Msg]).
+
 
 do_mlist({M,F,A}) ->
     Fname = edbg:find_source(M),

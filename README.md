@@ -192,6 +192,7 @@ on all functions within a Module, or just a few functions within a Module.
 * dump_output_eager : trace output goes to file often
 * dump_output_lazy : trace output goes to file not so often (default)
 * monotonic_ts : show the elapsed monotonic nano seconds
+* send_receive : trace send/receive messages from 'known' pids
 
 Tracing in an Erlang node is setup by the `erlang:trace/3` and
 `erlang:trace_pattern/3` BIFs`. The generated trace output in
@@ -225,6 +226,15 @@ With the `monotonic_ts` switch set, each trace message will have a
 monotonic timestamp, in nanoseconds, attached to it. This will be displayed
 in the call graph as the elapsed time counted from the first received
 trace message.
+
+With the `send_receive` switch set, we will also trace messages sent and
+received by 'known' pids. By 'known' pids we mean processes that we have
+seen earlier in a traced call. The reason for this is to avoid beig swamped
+by all the messages that the trace BIF is sending us. Note that we still
+may get a lots of messages that will cause the resulting trace file to be
+large and make the handling of it slower. The display of sent and received
+messages can be toggled on/off from the trace command prompt, see also the
+trace examples.
 
 ```erlang
    % Example, trace calls to the foo module, no more than 1000 trace msgs
@@ -812,4 +822,72 @@ received trace message.
      19:       <0.297.0> yaws_server:comp_sname/2 - 239546
      20:        <0.297.0> yaws_server:comp_sname/2 - 240632
    tlist>
+```
+
+By using the option 'send_receive', we will also see sent and
+received messages by any 'known' pid.
+
+
+```erlang
+   # BY ADDING THE OPTION 'send_receive' WHEN STARTING
+   # THE TRACE; WE CAN NOW SEE AND INSPECT MESSAGES
+   # SENT AND RECEIVED BY ANY KNOWN PID.
+   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,10000},
+                                                 send_receive]).
+   ok
+   (confd@hedlund)2> edbg:fstop().
+   ok
+   (confd@hedlund)3> edbg:file().
+
+    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
+    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
+    (pr)etty print record <N> <ArgN>
+    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
+    (on)/(off) send_receive
+    (p)agesize <N> (q)uit
+      0: <0.651.0> yaws_server:gserv_loop/4
+      1:  <<< Receive(<0.651.0>)  timeout...
+      2:  <0.651.0> yaws_server:gserv_loop/4
+      3:   <<< Receive(<0.651.0>)  {<0.652.0>,next,{ok,...
+      4: <0.652.0> yaws_server:peername/2
+      6: >>> Send(<0.652.0>) -> To(<0.626.0>)  {'$gen_call',{<0.652...
+      7: <<< Receive(<0.652.0>)  {#Ref<0.733272738.27...
+      8: <0.652.0> yaws_server:aloop/4
+      9:   <0.651.0> yaws_server:close_accepted_if_max/2
+     11:   <0.651.0> yaws_server:acceptor/1
+     13:   <0.651.0> yaws_server:gserv_loop/4
+     14: <0.799.0> yaws_server:acceptor0/2
+     15:  >>> Send(<0.799.0>) -> To(yaws_trace)  {'$gen_cast',{open,<...
+     16:  <0.799.0> yaws_server:do_accept/1
+     17:  <0.652.0> yaws_server:init_db/0
+     19:  <<< Receive(<0.652.0>)  {inet_async,#Port<0....
+     20:  <<< Receive(<0.652.0>)  {inet_async,#Port<0....
+   tlist> s 6
+
+   Message sent by: <0.652.0>  to: <0.626.0>
+   {'$gen_call',{<0.652.0>,#Ref<0.733272738.2716598273.214730>},get_filter}
+
+   tlist> s 7
+
+   Message received by: <0.652.0>
+   {#Ref<0.733272738.2716598273.214730>,undefined}
+
+   # NOTE THAT WE CAN TOGGLE ON/OFF THE DISPLAY OF THE
+   # SENT AND RECEIVED MESSAGES
+   tlist> off send_receive
+   turning off display of send/receive messages
+
+   tlist> a
+      0: <0.651.0> yaws_server:gserv_loop/4
+      2:  <0.651.0> yaws_server:gserv_loop/4
+      4: <0.652.0> yaws_server:peername/2
+      8: <0.652.0> yaws_server:aloop/4
+      9:   <0.651.0> yaws_server:close_accepted_if_max/2
+     11:   <0.651.0> yaws_server:acceptor/1
+     13:   <0.651.0> yaws_server:gserv_loop/4
+     14: <0.799.0> yaws_server:acceptor0/2
+     16:  <0.799.0> yaws_server:do_accept/1
+     17:  <0.652.0> yaws_server:init_db/0
+
+    tlist>
 ```
