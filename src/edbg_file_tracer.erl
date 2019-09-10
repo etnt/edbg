@@ -33,6 +33,7 @@
          , load_config/0
          , log_file_f/1
          , max_msgs_f/1
+         , memory_f/0
          , mname/2
          , monotonic_ts_f/0
          , new_mf/0
@@ -93,7 +94,10 @@
           %% (to avoid drowning in send/receive trace calls,
           %% we only save those trace messages that are sent or
           %% received from a Pid in a previously seen trace-call message)
-          send_receive = false
+          send_receive = false,
+
+          %% trace memory via the process_info/2 BIF.
+          memory = false
 
          }).
 
@@ -144,6 +148,9 @@ monotonic_ts_f() ->
 
 send_receive_f() ->
     fun(State) -> State#state{send_receive = true} end.
+
+memory_f() ->
+    fun(State) -> State#state{memory = true} end.
 
 max_msgs_f(Max)
   when is_integer(Max) andalso Max >= 0 ->
@@ -310,7 +317,7 @@ tloop(#state{srv_pid    = SrvPid,
       N,
       Tmsgs) ->
     {Suspended, Traces, MaybeStop, KnownPids} =
-        recv_all_traces(SrvPid, KnownPids0),
+        recv_all_traces(State, SrvPid, KnownPids0),
     {NewN, NewTmsgs} = tmsgs(State, Traces, N, Tmsgs),
     resume(Suspended),
 
@@ -389,10 +396,10 @@ log(Format, Args) ->
 %% So why are they doing it like this, I mean the suspend/resume thing...?
 %% Probably some sort of throttling mechanism?
 %%
-recv_all_traces(SrvPid, KnownPids) ->
-    recv_all_traces(SrvPid, KnownPids, [], [], infinity).
+recv_all_traces(State, SrvPid, KnownPids) ->
+    recv_all_traces(State, SrvPid, KnownPids, [], [], infinity).
 
-recv_all_traces(SrvPid, KnownPids, Suspended0, Traces, Timeout) ->
+recv_all_traces(State, SrvPid, KnownPids, Suspended0, Traces, Timeout) ->
     receive
         Trace when is_tuple(Trace) andalso
                    (element(1, Trace) == trace orelse
@@ -402,12 +409,16 @@ recv_all_traces(SrvPid, KnownPids, Suspended0, Traces, Timeout) ->
             case save_trace_p(Trace, KnownPids) of
                 true ->
                     NewKnownPids = maybe_add_to_known_pids(Trace, KnownPids),
-                    recv_all_traces(SrvPid,
+                    recv_all_traces(State,
+                                    SrvPid,
                                     NewKnownPids,
                                     Suspended,
-                                    [Trace|Traces], 0);
+                                    [x(State,Trace)|Traces], 0);
                 false ->
-                    recv_all_traces(SrvPid, KnownPids, Suspended,
+                    recv_all_traces(State,
+                                    SrvPid,
+                                    KnownPids,
+                                    Suspended,
                                     Traces, 0)
             end;
 
@@ -415,11 +426,23 @@ recv_all_traces(SrvPid, KnownPids, Suspended0, Traces, Timeout) ->
             {Suspended0, lists:reverse(Traces), Msg, KnownPids};
 
         _Other ->
-            recv_all_traces(SrvPid, KnownPids, Suspended0, Traces, 0)
+            recv_all_traces(State, SrvPid, KnownPids, Suspended0, Traces, 0)
 
     after Timeout ->
             {Suspended0, lists:reverse(Traces), false, KnownPids}
     end.
+
+%% Attach an attribute list to every trace message.
+%% So, for example, change:
+%%    {trace, Pid, call, MFA}
+%% to:
+%%    {trace, Pid, call, MFA, [{memory,Memory}]}
+x(#state{memory = true}, Trace) when is_pid(element(2,Trace)) ->
+    Memory = pinfo(element(2,Trace), memory),
+    list_to_tuple(tuple_to_list(Trace)++[[{memory,Memory}]]);
+x(_, Trace) ->
+    list_to_tuple(tuple_to_list(Trace)++[[]]).
+
 
 maybe_add_to_known_pids(Trace, KnownPids) when element(3, Trace) == call ->
     ordsets:add_element(element(2, Trace), KnownPids);
@@ -448,3 +471,11 @@ resume([Pid|Pids]) when node(Pid) == node() ->
     (catch erlang:resume_process(Pid)),
     resume(Pids);
 resume([]) -> ok.
+
+pinfo(Pid, Item) ->
+    case process_info(Pid, Item) of
+        {_Item, X} ->
+            X;
+        undefined ->
+            '-'
+    end.

@@ -193,6 +193,7 @@ on all functions within a Module, or just a few functions within a Module.
 * dump_output_lazy : trace output goes to file not so often (default)
 * monotonic_ts : show the elapsed monotonic nano seconds
 * send_receive : trace send/receive messages from 'known' pids
+* memory : track the memory usage of the 'known' pids
 
 Tracing in an Erlang node is setup by the `erlang:trace/3` and
 `erlang:trace_pattern/3` BIFs`. The generated trace output in
@@ -235,6 +236,16 @@ may get a lots of messages that will cause the resulting trace file to be
 large and make the handling of it slower. The display of sent and received
 messages can be toggled on/off from the trace command prompt, see also the
 trace examples.
+
+With the `memory` switch set, we will also track the memory usage of
+the processes that we get trace messages for. The memory size shown
+is the size in bytes of the process. This includes call stack, heap,
+and internal structures, as what we get from the process_info(Pid, memory)
+BIF. NOTE: we run the process_info/2 BIF when we receive the
+trace message from the BEAM engine so the memory size we present does
+not exactly represent the state of the process at the creation of the
+trace message.
+
 
 ```erlang
    % Example, trace calls to the foo module, no more than 1000 trace msgs
@@ -890,4 +901,61 @@ received messages by any 'known' pid.
      17:  <0.652.0> yaws_server:init_db/0
 
     tlist>
+```
+
+By using the option 'memory', we will also track the memory usage.
+
+```erlang
+   # BY ADDING THE OPTION 'memory' WHEN STARTING
+   # THE TRACE; WE CAN NOW TRACK THE MEMORY USAGE OF THE
+   # TRACED PROCESSES
+   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,1000},memory]).
+   ok
+   (confd@hedlund)2> edbg:fstop().
+   ok
+   (confd@hedlund)3> edbg:file().
+
+    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
+    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
+    (pr)etty print record <N> <ArgN>
+    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
+    (on)/(off) send_receive | memory
+    (p)agesize <N> (q)uit
+     0: <0.297.0>(14016) yaws_server:peername/2
+     2: <0.296.0>(21848) yaws_server:close_accepted_if_max/2
+     4: <0.296.0>(21848) yaws_server:acceptor/1
+     6: <0.297.0>(42624) yaws_server:aloop/4
+     7: <0.296.0>(21848) yaws_server:gserv_loop/4
+     8: <0.314.0>(8944) yaws_server:acceptor0/2
+     9:  <0.314.0>(8944) yaws_server:do_accept/1
+    10:  <0.297.0>(42624) yaws_server:init_db/0
+    12:  <0.297.0>(42624) yaws_server:fix_abs_uri/2
+    14:  <0.297.0>(42624) yaws_server:pick_sconf/4
+    15:   <0.297.0>(42624) yaws_server:pick_sconf/3
+    16:    <0.297.0>(42624) yaws_server:pick_host/4
+    17:     <0.297.0>(42624) yaws_server:comp_sname/2
+    18:      <0.297.0>(42624) yaws_server:comp_sname/2
+    19:       <0.297.0>(42624) yaws_server:comp_sname/2
+    20:        <0.297.0>(42624) yaws_server:comp_sname/2
+
+   tlist> off memory
+   turning off display of memory usage
+
+   tlist> at
+     0: <0.297.0> yaws_server:peername/2
+     2: <0.296.0> yaws_server:close_accepted_if_max/2
+     4: <0.296.0> yaws_server:acceptor/1
+     6: <0.297.0> yaws_server:aloop/4
+     7: <0.296.0> yaws_server:gserv_loop/4
+     8: <0.314.0> yaws_server:acceptor0/2
+     9:  <0.314.0> yaws_server:do_accept/1
+    10:  <0.297.0> yaws_server:init_db/0
+    12:  <0.297.0> yaws_server:fix_abs_uri/2
+    14:  <0.297.0> yaws_server:pick_sconf/4
+    15:   <0.297.0> yaws_server:pick_sconf/3
+    16:    <0.297.0> yaws_server:pick_host/4
+    17:     <0.297.0> yaws_server:comp_sname/2
+    18:      <0.297.0> yaws_server:comp_sname/2
+    19:       <0.297.0> yaws_server:comp_sname/2
+    20:        <0.297.0> yaws_server:comp_sname/2
 ```
