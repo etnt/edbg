@@ -93,11 +93,11 @@
 -define(help_hi(Str), edbg_color_srv:help_hi(Str)).
 -define(edbg_color_srv_init(), edbg_color_srv:init()).
 -else.
--define(info_msg(Fmt,Args), io:format(Fmt,Args)).
--define(att_msg(Fmt,Args), io:format(Fmt,Args)).
--define(warn_msg(Fmt,Args), io:format(Fmt,Args)).
--define(err_msg(Fmt,Args), io:format(Fmt,Args)).
--define(cur_line_msg(Fmt,Args), io:format(Fmt,Args)).
+-define(info_msg(Fmt,Args), io:format(lists:flatten(Fmt),Args)).
+-define(att_msg(Fmt,Args), io:format(lists:flatten(Fmt),Args)).
+-define(warn_msg(Fmt,Args), io:format(lists:flatten(Fmt),Args)).
+-define(err_msg(Fmt,Args), io:format(lists:flatten(Fmt),Args)).
+-define(cur_line_msg(Fmt,Args), io:format(lists:flatten(Fmt),Args)).
 -define(c_hi(Str), Str).
 -define(c_warn(Str), Str).
 -define(c_err(Str), Str).
