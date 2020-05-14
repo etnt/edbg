@@ -462,6 +462,12 @@ aloop(#s{meta   = Meta,
             ?MODULE:aloop(S#s{break_at = {Mod,Line},
                               stack = {Cur,Cur,Bs,{Mod,Line}}});
 
+        {Meta, {func_at, Mod, Line, Cur}} ->
+            Bs = int:meta(Meta, bindings, nostack),
+            mlist(Mod,Line,S#s.context),
+            ?MODULE:aloop(S#s{break_at = {Mod,Line},
+                              stack = {Cur,Cur,Bs,{Mod,Line}}});
+
         {Meta,{exit_at, {Mod, Line}, Reason, Cur}} ->
             Bs = int:meta(Meta, bindings, nostack),
             mlist(Mod,Line,S#s.context),
