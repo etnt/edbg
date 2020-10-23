@@ -16,6 +16,10 @@ BEAM_OBJS=src/edbg.beam src/edbg_tracer.beam src/edbg_trace_filter.beam
 #BEAM_OBJS=$(filter-out *color*, $(BEAM))
 endif
 
+REBAR3_URL=https://s3.amazonaws.com/rebar3/rebar3
+WGET=$(shell which wget)
+CURL=$(shell which curl)
+
 .PHONY: all old test clean
 all: rebar3 compile
 old: get-deps $(BEAM_OBJS)
@@ -37,8 +41,13 @@ compile:
 
 get-deps: rebar3 old_deps pp_record-dep
 
+ifeq ($(WGET),)
 rebar3:
-	wget https://s3.amazonaws.com/rebar3/rebar3 && chmod +x rebar3
+	$(CURL) -O $(REBAR3_URL) && chmod +x rebar3
+else
+rebar3:
+	$(WGET) $(REBAR3_URL) && chmod +x rebar3
+endif
 
 old_deps:
 	if [ ! -d deps ]; then \

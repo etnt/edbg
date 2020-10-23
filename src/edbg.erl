@@ -17,10 +17,15 @@
          c/3,
          continue/1,
          continue/3,
+         delete_breaks/0,
          delete_break/2,
+         bdel/0,
          bdel/2,
+         disable_breaks/0,
          disable_break/2,
+         boff/0,
          boff/2,
+         enable_breaks/0,
          enable_break/2,
          file/0,
          file/1,
@@ -28,6 +33,7 @@
          fstart/1,
          fstart/2,
          fstop/0,
+         bon/0,
          bon/2,
          f/1,
          f/3,
@@ -162,18 +168,29 @@ break(Mod, Line) ->
     save_all_breakpoints(),
     ok.
 
-bdel(Mod, Line) -> delete_break(Mod, Line).
+bdel() -> delete_breaks().
+delete_breaks() ->
+    [delete_break(Mod, Line) || {{Mod, Line},_} <- int:all_breaks()].
 
+bdel(Mod, Line) -> delete_break(Mod, Line).
 delete_break(Mod, Line) ->
     ok = int:delete_break(Mod, Line),
     save_all_breakpoints(),
     ok.
+
+boff() -> disable_breaks().
+disable_breaks() ->
+    [disable_break(Mod, Line) || {{Mod, Line},_} <- int:all_breaks()].
 
 boff(Mod, Line) -> disable_break(Mod, Line).
 disable_break(Mod, Line) ->
     ok = int:disable_break(Mod, Line),
     save_all_breakpoints(),
     ok.
+
+bon() -> enable_breaks().
+enable_breaks() ->
+    [enable_break(Mod, Line) || {{Mod, Line},_} <- int:all_breaks()].
 
 bon(Mod, Line) -> enable_break(Mod, Line).
 enable_break(Mod, Line) ->
