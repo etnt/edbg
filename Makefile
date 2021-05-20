@@ -22,7 +22,7 @@ CURL=$(shell which curl)
 
 .PHONY: all old test clean
 all: rebar3 compile
-old: get-deps $(BEAM_OBJS)
+old: old-get-deps $(BEAM_OBJS)
 test: $(TBEAM)
 
 %.beam: %.erl
@@ -40,6 +40,8 @@ compile:
 	./rebar3 compile
 
 get-deps: rebar3 old_deps pp_record-dep
+
+old-get-deps: old_deps pp_record-dep
 
 ifeq ($(WGET),)
 rebar3:

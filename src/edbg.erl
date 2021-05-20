@@ -80,7 +80,6 @@
         ]).
 
 
-
 -ifdef(USE_COLORS).
 -define(info_msg(Fmt,Args), edbg_color_srv:info_msg(Fmt,Args)).
 -define(att_msg(Fmt,Args), edbg_color_srv:att_msg(Fmt,Args)).
