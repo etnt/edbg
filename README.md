@@ -4,11 +4,11 @@ A tty based interface to the Erlang debugger and tracer.
 
 ## Table of Contents
 1. [Install](#install)
-2. [Custom Color](#color)
-3. [Debug Usage](#dbg-usage)
-4. [Trace Usage](#trace-usage)
-5. [Debug examples](#dbg-examples)
-6. [Trace examples](#trace-examples)
+2. [Trace examples](#trace-examples)
+3. [Custom Color](#color)
+4. [Debug Usage](#dbg-usage)
+5. [Trace Usage](#trace-usage)
+6. [Debug examples](#dbg-examples)
 
 Useful if you, for example, work from home but still
 want to debug your code at your work desktop, or if you
@@ -19,7 +19,10 @@ standard OTP `int.erl` module. What the edbg debugger brings is basically the
 tty based attached mode and the possibility to make use of interactively
 defined conditional break points.
 
-The edbg tracing functionality is (hopefully) a somewhat more novel approach.
+The edbg tracing functionality is (hopefully) a somewhat more novel approach
+and actually is what I myself is using all the time. In fact it is so good that
+I now have moved the Trace Example chapter just below the Installation ditto.
+It is all you need... ;-)
 
 <a name="install"></a>
 ## INSTALL
@@ -36,6 +39,332 @@ the code as:
 ```
    env USE_COLORS=false make
 ```
+
+NOTE: If you don't like rebar (like me) and favour plain Make + Erlc then:
+```
+   Run: make old
+   Add: code:add_path("YOUR-PATH-HERE/edbg/ebin").
+   Add: code:add_path("YOUR-PATH-HERE/edbg/deps/pp_record/ebin").
+     to your ~/.erlang file.
+```
+
+<a name="trace-examples"></a>
+## TRACE EXAMPLES
+```erlang
+   # TRACE THE SPECIFIED MODULES BELOW.
+   # THE TRACE OUTPUT WILL BE STORED ON FILE.
+   1> edbg:fstart([yaws_server,yaws,yaws_config],[{max_msgs,10000}]).
+   ok
+
+   # NOW RUN A CALL TOWARD YAWS !!
+
+   2> edbg:fstop().
+   ok
+
+   # WE RELY ON USING THE DEFAULT FILENAME, HENCE NO NEED TO
+   # SPECIFY IT HERE WHEN LOADING THE TRACE INFO.
+   3> edbg:file().
+
+    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
+    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
+    (pr)etty print record <N> <ArgN>
+    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
+    (p)agesize <N> (q)uit
+     0: <0.255.0> yaws_server:gserv_loop/4
+     1:  <0.258.0> yaws_server:gserv_loop/4
+     2:   <0.233.0> yaws:month/1
+     4:   <0.259.0> yaws_server:peername/2
+     6:   <0.258.0> yaws_server:close_accepted_if_max/2
+     8:   <0.258.0> yaws_server:acceptor/1
+    10:   <0.258.0> yaws_server:gserv_loop/4
+    11:    <0.281.0> yaws_server:acceptor0/2
+    12:     <0.281.0> yaws_server:do_accept/1
+    13:      <0.259.0> yaws_server:aloop/4
+    14:       <0.259.0> yaws_server:init_db/0
+    16:       <0.259.0> yaws:http_get_headers/2
+    17:        <0.259.0> yaws:do_http_get_headers/2
+    18:         <0.259.0> yaws:http_recv_request/2
+    19:          <0.259.0> yaws:setopts/3
+
+   # TO INSPECT A PARTICULAR CALL (without drowning in output),
+   # WE USE THE (s)how COMMAND WHICH WILL DISPLAY THE FUNCTION
+   # CLAUSE HEADS IN ORDER TO HELP US DECIDE WHICH ARGUMENT TO INSPECT.
+   tlist> s 4
+
+   Call: yaws_server:peername/2
+   -----------------------------------
+
+   peername(CliSock, ssl) ->
+
+   peername(CliSock, nossl) ->
+
+   -----------------------------------
+
+   # SHOW WHAT THE SECOND ARGUMENT CONTAINED
+   tlist> s 4 2
+
+   Call: yaws_server:peername/2 , argument 2:
+   -----------------------------------
+   nossl
+
+   # WHAT DID THE FUNCTION CALL RETURN?
+   tlist> r 4
+
+   Call: yaws_server:peername/2 , return value:
+   -----------------------------------
+   {{127,0,0,1},35871}
+
+   # IF WE KNOW THE ARGUMENT TO BE A RECORD, WE CAN PRETTY PRINT IT
+   tlist> s 177
+
+   Call: yaws_server:handle_request/3
+   -----------------------------------
+
+   handle_request(CliSock, ARG, _N)
+     when is_record(ARG#arg.state, rewrite_response) ->
+
+   handle_request(CliSock, ARG, N) ->
+
+   -----------------------------------
+   tlist> s 177 2
+
+   Call: yaws_server:handle_request/3 , argument 2:
+   -----------------------------------
+   {arg,#Port<0.6886>,
+        {{127,0,0,1},35871},
+        {headers,undefined,"*/*","localhost:8008",undefined,undefined,undefined,
+                 undefined,undefined,undefined,undefined,"curl/7.35.0",undefined,
+                 [],undefined,undefined,undefined,undefined,undefined,
+                 {"admin","admin","Basic YWRtaW46YWRtaW4="},
+                 undefined,undefined,[]},
+        ....
+
+   tlist> pr 177 2
+
+   Call: yaws_server:handle_request/3 , argument 2:
+   -----------------------------------
+   #arg{clisock = #Port<0.6886>,
+        client_ip_port = {{127,0,0,1},35871},
+        headers = #headers{connection = undefined,accept = "*/*",
+                           host = "localhost:8008",if_modified_since = undefined,
+                           if_match = undefined,if_none_match = undefined,
+                           if_range = undefined,if_unmodified_since = undefined,
+                           range = undefined,referer = undefined,
+                           user_agent = "curl/7.35.0",accept_ranges = undefined,
+                           cookie = [],keep_alive = undefined,location = undefined,
+                           content_length = undefined,content_type = undefined,
+                           content_encoding = undefined,
+                           authorization = {"admin","admin","Basic YWRtaW46YWRtaW4="},
+                           transfer_encoding = undefined,x_forwarded_for = undefined,
+                           other = []},
+        req = #http_request{method = 'GET',
+                            path = {abs_path,"/restconf/data"},
+       ....
+
+   # HERE IS AN EXAMPLE OF HOW WE CAN SEARCH FOR PARTICULAR
+   # FUNCTION CALL THAT WE ARE INTERESTED IN.
+   # NOTE THAT IT IS ENOUGH TO JUST SPECIFY A PREFIX OF THE FUNCTION NAME
+   tlist> f yaws:decode_b
+    32:           <0.537.0> yaws:decode_base64/1
+    33:            <0.537.0> yaws:decode_base64/2
+    34:             <0.537.0> yaws:d/1
+      ...
+
+
+   # WE CAN ALSO SEARCH IN A PARTICULAR ARGUMENT
+   # (the 2:nd argument should contain 'packet_size')
+   tlist> f yaws:setopts 2 packet_size
+    22:         <0.537.0> yaws:setopts/3
+    24:         <0.537.0> yaws:do_recv/3
+    26:         <0.537.0> yaws:http_collect_headers/5
+    ...
+
+   tlist> s 22 2
+
+   Call: yaws:setopts/3 , argument 2:
+   -----------------------------------
+   [{packet,httph},{packet_size,16384}]
+
+
+   # WE CAN ALSO SEARCH AMONG THE RETURN VALUES:
+   tlist> f GET
+   184:           <0.537.0> yaws:make_allow_header/1
+   187:          <0.537.0> yaws_server:deliver_accumulated/1
+   188:           <0.537.0> yaws:outh_get_content_encoding/0
+   190:           <0.537.0> yaws:outh_set_content_encoding/1
+     ...
+
+   tlist> r 184
+
+   Call: yaws:make_allow_header/1 , return value:
+   -----------------------------------
+   ["Allow: GET, POST, OPTIONS, HEAD\r\n"]
+ ```
+
+By using the option 'monotonic_ts', we will also see the
+elapsed monotonic time, in nano seconds, from the first
+received trace message.
+
+```erlang
+   # BY ADDING THE OPTION 'monotonic_ts' WHEN STARTING
+   # THE TRACE; WE WILL SEE THE ELAPSED NANO SECONDS FOR
+   # EACH CALL, COUNTED FROM THE FIRST TRACED CALL.
+   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,10000},
+                                                 monotonic_ts]).
+   ok
+   (confd@hedlund)2> edbg:fstop().
+   ok
+   (confd@hedlund)3> edbg:file().
+
+    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
+    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
+    (pr)etty print record <N> <ArgN>
+    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
+    (p)agesize <N> (q)uit
+      0: <0.297.0> yaws_server:peername/2 - 0
+      2: <0.296.0> yaws_server:close_accepted_if_max/2 - 37276
+      4: <0.296.0> yaws_server:acceptor/1 - 46436
+      6: <0.296.0> yaws_server:gserv_loop/4 - 72287
+      7: <0.315.0> yaws_server:acceptor0/2 - 104797
+      8:  <0.315.0> yaws_server:do_accept/1 - 110475
+      9: <0.297.0> yaws_server:aloop/4 - 142479
+     10:  <0.297.0> yaws_server:init_db/0 - 164453
+     12:  <0.297.0> yaws_server:fix_abs_uri/2 - 216505
+     14:  <0.297.0> yaws_server:pick_sconf/4 - 220942
+     15:   <0.297.0> yaws_server:pick_sconf/3 - 225815
+     16:    <0.297.0> yaws_server:pick_host/4 - 230099
+     17:     <0.297.0> yaws_server:comp_sname/2 - 235914
+     18:      <0.297.0> yaws_server:comp_sname/2 - 238042
+     19:       <0.297.0> yaws_server:comp_sname/2 - 239546
+     20:        <0.297.0> yaws_server:comp_sname/2 - 240632
+   tlist>
+```
+
+By using the option 'send_receive', we will also see sent and
+received messages by any 'known' pid.
+
+
+```erlang
+   # BY ADDING THE OPTION 'send_receive' WHEN STARTING
+   # THE TRACE; WE CAN NOW SEE AND INSPECT MESSAGES
+   # SENT AND RECEIVED BY ANY KNOWN PID.
+   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,10000},
+                                                 send_receive]).
+   ok
+   (confd@hedlund)2> edbg:fstop().
+   ok
+   (confd@hedlund)3> edbg:file().
+
+    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
+    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
+    (pr)etty print record <N> <ArgN>
+    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
+    (on)/(off) send_receive
+    (p)agesize <N> (q)uit
+      0: <0.651.0> yaws_server:gserv_loop/4
+      1:  <<< Receive(<0.651.0>)  timeout...
+      2:  <0.651.0> yaws_server:gserv_loop/4
+      3:   <<< Receive(<0.651.0>)  {<0.652.0>,next,{ok,...
+      4: <0.652.0> yaws_server:peername/2
+      6: >>> Send(<0.652.0>) -> To(<0.626.0>)  {'$gen_call',{<0.652...
+      7: <<< Receive(<0.652.0>)  {#Ref<0.733272738.27...
+      8: <0.652.0> yaws_server:aloop/4
+      9:   <0.651.0> yaws_server:close_accepted_if_max/2
+     11:   <0.651.0> yaws_server:acceptor/1
+     13:   <0.651.0> yaws_server:gserv_loop/4
+     14: <0.799.0> yaws_server:acceptor0/2
+     15:  >>> Send(<0.799.0>) -> To(yaws_trace)  {'$gen_cast',{open,<...
+     16:  <0.799.0> yaws_server:do_accept/1
+     17:  <0.652.0> yaws_server:init_db/0
+     19:  <<< Receive(<0.652.0>)  {inet_async,#Port<0....
+     20:  <<< Receive(<0.652.0>)  {inet_async,#Port<0....
+   tlist> s 6
+
+   Message sent by: <0.652.0>  to: <0.626.0>
+   {'$gen_call',{<0.652.0>,#Ref<0.733272738.2716598273.214730>},get_filter}
+
+   tlist> s 7
+
+   Message received by: <0.652.0>
+   {#Ref<0.733272738.2716598273.214730>,undefined}
+
+   # NOTE THAT WE CAN TOGGLE ON/OFF THE DISPLAY OF THE
+   # SENT AND RECEIVED MESSAGES
+   tlist> off send_receive
+   turning off display of send/receive messages
+
+   tlist> a
+      0: <0.651.0> yaws_server:gserv_loop/4
+      2:  <0.651.0> yaws_server:gserv_loop/4
+      4: <0.652.0> yaws_server:peername/2
+      8: <0.652.0> yaws_server:aloop/4
+      9:   <0.651.0> yaws_server:close_accepted_if_max/2
+     11:   <0.651.0> yaws_server:acceptor/1
+     13:   <0.651.0> yaws_server:gserv_loop/4
+     14: <0.799.0> yaws_server:acceptor0/2
+     16:  <0.799.0> yaws_server:do_accept/1
+     17:  <0.652.0> yaws_server:init_db/0
+
+    tlist>
+```
+
+By using the option 'memory', we will also track the memory usage.
+
+```erlang
+   # BY ADDING THE OPTION 'memory' WHEN STARTING
+   # THE TRACE; WE CAN NOW TRACK THE MEMORY USAGE OF THE
+   # TRACED PROCESSES
+   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,1000},memory]).
+   ok
+   (confd@hedlund)2> edbg:fstop().
+   ok
+   (confd@hedlund)3> edbg:file().
+
+    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
+    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
+    (pr)etty print record <N> <ArgN>
+    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
+    (on)/(off) send_receive | memory
+    (p)agesize <N> (q)uit
+     0: <0.297.0>(14016) yaws_server:peername/2
+     2: <0.296.0>(21848) yaws_server:close_accepted_if_max/2
+     4: <0.296.0>(21848) yaws_server:acceptor/1
+     6: <0.297.0>(42624) yaws_server:aloop/4
+     7: <0.296.0>(21848) yaws_server:gserv_loop/4
+     8: <0.314.0>(8944) yaws_server:acceptor0/2
+     9:  <0.314.0>(8944) yaws_server:do_accept/1
+    10:  <0.297.0>(42624) yaws_server:init_db/0
+    12:  <0.297.0>(42624) yaws_server:fix_abs_uri/2
+    14:  <0.297.0>(42624) yaws_server:pick_sconf/4
+    15:   <0.297.0>(42624) yaws_server:pick_sconf/3
+    16:    <0.297.0>(42624) yaws_server:pick_host/4
+    17:     <0.297.0>(42624) yaws_server:comp_sname/2
+    18:      <0.297.0>(42624) yaws_server:comp_sname/2
+    19:       <0.297.0>(42624) yaws_server:comp_sname/2
+    20:        <0.297.0>(42624) yaws_server:comp_sname/2
+
+   tlist> off memory
+   turning off display of memory usage
+
+   tlist> at
+     0: <0.297.0> yaws_server:peername/2
+     2: <0.296.0> yaws_server:close_accepted_if_max/2
+     4: <0.296.0> yaws_server:acceptor/1
+     6: <0.297.0> yaws_server:aloop/4
+     7: <0.296.0> yaws_server:gserv_loop/4
+     8: <0.314.0> yaws_server:acceptor0/2
+     9:  <0.314.0> yaws_server:do_accept/1
+    10:  <0.297.0> yaws_server:init_db/0
+    12:  <0.297.0> yaws_server:fix_abs_uri/2
+    14:  <0.297.0> yaws_server:pick_sconf/4
+    15:   <0.297.0> yaws_server:pick_sconf/3
+    16:    <0.297.0> yaws_server:pick_host/4
+    17:     <0.297.0> yaws_server:comp_sname/2
+    18:      <0.297.0> yaws_server:comp_sname/2
+    19:       <0.297.0> yaws_server:comp_sname/2
+    20:        <0.297.0> yaws_server:comp_sname/2
+```
+
 
 <a name="color"></a>
 ## CUSTOM COLOR
@@ -643,319 +972,3 @@ Here is an example of an interactively defined conditional break point
      'SSL' = nossl
 ```
 
-<a name="trace-examples"></a>
-## TRACE EXAMPLES
-```erlang
-   # TRACE THE SPECIFIED MODULES BELOW.
-   # THE TRACE OUTPUT WILL BE STORED ON FILE.
-   1> edbg:fstart([yaws_server,yaws,yaws_config],[{max_msgs,10000}]).
-   ok
-
-   # NOW RUN A CALL TOWARD YAWS !!
-
-   2> edbg:fstop().
-   ok
-
-   # WE RELY ON USING THE DEFAULT FILENAME, HENCE NO NEED TO
-   # SPECIFY IT HERE WHEN LOADING THE TRACE INFO.
-   3> edbg:file().
-
-    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
-    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
-    (pr)etty print record <N> <ArgN>
-    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
-    (p)agesize <N> (q)uit
-     0: <0.255.0> yaws_server:gserv_loop/4
-     1:  <0.258.0> yaws_server:gserv_loop/4
-     2:   <0.233.0> yaws:month/1
-     4:   <0.259.0> yaws_server:peername/2
-     6:   <0.258.0> yaws_server:close_accepted_if_max/2
-     8:   <0.258.0> yaws_server:acceptor/1
-    10:   <0.258.0> yaws_server:gserv_loop/4
-    11:    <0.281.0> yaws_server:acceptor0/2
-    12:     <0.281.0> yaws_server:do_accept/1
-    13:      <0.259.0> yaws_server:aloop/4
-    14:       <0.259.0> yaws_server:init_db/0
-    16:       <0.259.0> yaws:http_get_headers/2
-    17:        <0.259.0> yaws:do_http_get_headers/2
-    18:         <0.259.0> yaws:http_recv_request/2
-    19:          <0.259.0> yaws:setopts/3
-
-   # TO INSPECT A PARTICULAR CALL (without drowning in output),
-   # WE USE THE (s)how COMMAND WHICH WILL DISPLAY THE FUNCTION
-   # CLAUSE HEADS IN ORDER TO HELP US DECIDE WHICH ARGUMENT TO INSPECT.
-   tlist> s 4
-
-   Call: yaws_server:peername/2
-   -----------------------------------
-
-   peername(CliSock, ssl) ->
-
-   peername(CliSock, nossl) ->
-
-   -----------------------------------
-
-   # SHOW WHAT THE SECOND ARGUMENT CONTAINED
-   tlist> s 4 2
-
-   Call: yaws_server:peername/2 , argument 2:
-   -----------------------------------
-   nossl
-
-   # WHAT DID THE FUNCTION CALL RETURN?
-   tlist> r 4
-
-   Call: yaws_server:peername/2 , return value:
-   -----------------------------------
-   {{127,0,0,1},35871}
-
-   # IF WE KNOW THE ARGUMENT TO BE A RECORD, WE CAN PRETTY PRINT IT
-   tlist> s 177
-
-   Call: yaws_server:handle_request/3
-   -----------------------------------
-
-   handle_request(CliSock, ARG, _N)
-     when is_record(ARG#arg.state, rewrite_response) ->
-
-   handle_request(CliSock, ARG, N) ->
-
-   -----------------------------------
-   tlist> s 177 2
-
-   Call: yaws_server:handle_request/3 , argument 2:
-   -----------------------------------
-   {arg,#Port<0.6886>,
-        {{127,0,0,1},35871},
-        {headers,undefined,"*/*","localhost:8008",undefined,undefined,undefined,
-                 undefined,undefined,undefined,undefined,"curl/7.35.0",undefined,
-                 [],undefined,undefined,undefined,undefined,undefined,
-                 {"admin","admin","Basic YWRtaW46YWRtaW4="},
-                 undefined,undefined,[]},
-        ....
-
-   tlist> pr 177 2
-
-   Call: yaws_server:handle_request/3 , argument 2:
-   -----------------------------------
-   #arg{clisock = #Port<0.6886>,
-        client_ip_port = {{127,0,0,1},35871},
-        headers = #headers{connection = undefined,accept = "*/*",
-                           host = "localhost:8008",if_modified_since = undefined,
-                           if_match = undefined,if_none_match = undefined,
-                           if_range = undefined,if_unmodified_since = undefined,
-                           range = undefined,referer = undefined,
-                           user_agent = "curl/7.35.0",accept_ranges = undefined,
-                           cookie = [],keep_alive = undefined,location = undefined,
-                           content_length = undefined,content_type = undefined,
-                           content_encoding = undefined,
-                           authorization = {"admin","admin","Basic YWRtaW46YWRtaW4="},
-                           transfer_encoding = undefined,x_forwarded_for = undefined,
-                           other = []},
-        req = #http_request{method = 'GET',
-                            path = {abs_path,"/restconf/data"},
-       ....
-
-   # HERE IS AN EXAMPLE OF HOW WE CAN SEARCH FOR PARTICULAR
-   # FUNCTION CALL THAT WE ARE INTERESTED IN.
-   # NOTE THAT IT IS ENOUGH TO JUST SPECIFY A PREFIX OF THE FUNCTION NAME
-   tlist> f yaws:decode_b
-    32:           <0.537.0> yaws:decode_base64/1
-    33:            <0.537.0> yaws:decode_base64/2
-    34:             <0.537.0> yaws:d/1
-      ...
-
-
-   # WE CAN ALSO SEARCH IN A PARTICULAR ARGUMENT
-   # (the 2:nd argument should contain 'packet_size')
-   tlist> f yaws:setopts 2 packet_size
-    22:         <0.537.0> yaws:setopts/3
-    24:         <0.537.0> yaws:do_recv/3
-    26:         <0.537.0> yaws:http_collect_headers/5
-    ...
-
-   tlist> s 22 2
-
-   Call: yaws:setopts/3 , argument 2:
-   -----------------------------------
-   [{packet,httph},{packet_size,16384}]
-
-
-   # WE CAN ALSO SEARCH AMONG THE RETURN VALUES:
-   tlist> f GET
-   184:           <0.537.0> yaws:make_allow_header/1
-   187:          <0.537.0> yaws_server:deliver_accumulated/1
-   188:           <0.537.0> yaws:outh_get_content_encoding/0
-   190:           <0.537.0> yaws:outh_set_content_encoding/1
-     ...
-
-   tlist> r 184
-
-   Call: yaws:make_allow_header/1 , return value:
-   -----------------------------------
-   ["Allow: GET, POST, OPTIONS, HEAD\r\n"]
- ```
-
-By using the option 'monotonic_ts', we will also see the
-elapsed monotonic time, in nano seconds, from the first
-received trace message.
-
-```erlang
-   # BY ADDING THE OPTION 'monotonic_ts' WHEN STARTING
-   # THE TRACE; WE WILL SEE THE ELAPSED NANO SECONDS FOR
-   # EACH CALL, COUNTED FROM THE FIRST TRACED CALL.
-   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,10000},
-                                                 monotonic_ts]).
-   ok
-   (confd@hedlund)2> edbg:fstop().
-   ok
-   (confd@hedlund)3> edbg:file().
-
-    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
-    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
-    (pr)etty print record <N> <ArgN>
-    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
-    (p)agesize <N> (q)uit
-      0: <0.297.0> yaws_server:peername/2 - 0
-      2: <0.296.0> yaws_server:close_accepted_if_max/2 - 37276
-      4: <0.296.0> yaws_server:acceptor/1 - 46436
-      6: <0.296.0> yaws_server:gserv_loop/4 - 72287
-      7: <0.315.0> yaws_server:acceptor0/2 - 104797
-      8:  <0.315.0> yaws_server:do_accept/1 - 110475
-      9: <0.297.0> yaws_server:aloop/4 - 142479
-     10:  <0.297.0> yaws_server:init_db/0 - 164453
-     12:  <0.297.0> yaws_server:fix_abs_uri/2 - 216505
-     14:  <0.297.0> yaws_server:pick_sconf/4 - 220942
-     15:   <0.297.0> yaws_server:pick_sconf/3 - 225815
-     16:    <0.297.0> yaws_server:pick_host/4 - 230099
-     17:     <0.297.0> yaws_server:comp_sname/2 - 235914
-     18:      <0.297.0> yaws_server:comp_sname/2 - 238042
-     19:       <0.297.0> yaws_server:comp_sname/2 - 239546
-     20:        <0.297.0> yaws_server:comp_sname/2 - 240632
-   tlist>
-```
-
-By using the option 'send_receive', we will also see sent and
-received messages by any 'known' pid.
-
-
-```erlang
-   # BY ADDING THE OPTION 'send_receive' WHEN STARTING
-   # THE TRACE; WE CAN NOW SEE AND INSPECT MESSAGES
-   # SENT AND RECEIVED BY ANY KNOWN PID.
-   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,10000},
-                                                 send_receive]).
-   ok
-   (confd@hedlund)2> edbg:fstop().
-   ok
-   (confd@hedlund)3> edbg:file().
-
-    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
-    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
-    (pr)etty print record <N> <ArgN>
-    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
-    (on)/(off) send_receive
-    (p)agesize <N> (q)uit
-      0: <0.651.0> yaws_server:gserv_loop/4
-      1:  <<< Receive(<0.651.0>)  timeout...
-      2:  <0.651.0> yaws_server:gserv_loop/4
-      3:   <<< Receive(<0.651.0>)  {<0.652.0>,next,{ok,...
-      4: <0.652.0> yaws_server:peername/2
-      6: >>> Send(<0.652.0>) -> To(<0.626.0>)  {'$gen_call',{<0.652...
-      7: <<< Receive(<0.652.0>)  {#Ref<0.733272738.27...
-      8: <0.652.0> yaws_server:aloop/4
-      9:   <0.651.0> yaws_server:close_accepted_if_max/2
-     11:   <0.651.0> yaws_server:acceptor/1
-     13:   <0.651.0> yaws_server:gserv_loop/4
-     14: <0.799.0> yaws_server:acceptor0/2
-     15:  >>> Send(<0.799.0>) -> To(yaws_trace)  {'$gen_cast',{open,<...
-     16:  <0.799.0> yaws_server:do_accept/1
-     17:  <0.652.0> yaws_server:init_db/0
-     19:  <<< Receive(<0.652.0>)  {inet_async,#Port<0....
-     20:  <<< Receive(<0.652.0>)  {inet_async,#Port<0....
-   tlist> s 6
-
-   Message sent by: <0.652.0>  to: <0.626.0>
-   {'$gen_call',{<0.652.0>,#Ref<0.733272738.2716598273.214730>},get_filter}
-
-   tlist> s 7
-
-   Message received by: <0.652.0>
-   {#Ref<0.733272738.2716598273.214730>,undefined}
-
-   # NOTE THAT WE CAN TOGGLE ON/OFF THE DISPLAY OF THE
-   # SENT AND RECEIVED MESSAGES
-   tlist> off send_receive
-   turning off display of send/receive messages
-
-   tlist> a
-      0: <0.651.0> yaws_server:gserv_loop/4
-      2:  <0.651.0> yaws_server:gserv_loop/4
-      4: <0.652.0> yaws_server:peername/2
-      8: <0.652.0> yaws_server:aloop/4
-      9:   <0.651.0> yaws_server:close_accepted_if_max/2
-     11:   <0.651.0> yaws_server:acceptor/1
-     13:   <0.651.0> yaws_server:gserv_loop/4
-     14: <0.799.0> yaws_server:acceptor0/2
-     16:  <0.799.0> yaws_server:do_accept/1
-     17:  <0.652.0> yaws_server:init_db/0
-
-    tlist>
-```
-
-By using the option 'memory', we will also track the memory usage.
-
-```erlang
-   # BY ADDING THE OPTION 'memory' WHEN STARTING
-   # THE TRACE; WE CAN NOW TRACK THE MEMORY USAGE OF THE
-   # TRACED PROCESSES
-   (confd@hedlund)1> edbg:fstart([yaws_server],[{max_msgs,1000},memory]).
-   ok
-   (confd@hedlund)2> edbg:fstop().
-   ok
-   (confd@hedlund)3> edbg:file().
-
-    (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
-    (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
-    (pr)etty print record <N> <ArgN>
-    (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>
-    (on)/(off) send_receive | memory
-    (p)agesize <N> (q)uit
-     0: <0.297.0>(14016) yaws_server:peername/2
-     2: <0.296.0>(21848) yaws_server:close_accepted_if_max/2
-     4: <0.296.0>(21848) yaws_server:acceptor/1
-     6: <0.297.0>(42624) yaws_server:aloop/4
-     7: <0.296.0>(21848) yaws_server:gserv_loop/4
-     8: <0.314.0>(8944) yaws_server:acceptor0/2
-     9:  <0.314.0>(8944) yaws_server:do_accept/1
-    10:  <0.297.0>(42624) yaws_server:init_db/0
-    12:  <0.297.0>(42624) yaws_server:fix_abs_uri/2
-    14:  <0.297.0>(42624) yaws_server:pick_sconf/4
-    15:   <0.297.0>(42624) yaws_server:pick_sconf/3
-    16:    <0.297.0>(42624) yaws_server:pick_host/4
-    17:     <0.297.0>(42624) yaws_server:comp_sname/2
-    18:      <0.297.0>(42624) yaws_server:comp_sname/2
-    19:       <0.297.0>(42624) yaws_server:comp_sname/2
-    20:        <0.297.0>(42624) yaws_server:comp_sname/2
-
-   tlist> off memory
-   turning off display of memory usage
-
-   tlist> at
-     0: <0.297.0> yaws_server:peername/2
-     2: <0.296.0> yaws_server:close_accepted_if_max/2
-     4: <0.296.0> yaws_server:acceptor/1
-     6: <0.297.0> yaws_server:aloop/4
-     7: <0.296.0> yaws_server:gserv_loop/4
-     8: <0.314.0> yaws_server:acceptor0/2
-     9:  <0.314.0> yaws_server:do_accept/1
-    10:  <0.297.0> yaws_server:init_db/0
-    12:  <0.297.0> yaws_server:fix_abs_uri/2
-    14:  <0.297.0> yaws_server:pick_sconf/4
-    15:   <0.297.0> yaws_server:pick_sconf/3
-    16:    <0.297.0> yaws_server:pick_host/4
-    17:     <0.297.0> yaws_server:comp_sname/2
-    18:      <0.297.0> yaws_server:comp_sname/2
-    19:       <0.297.0> yaws_server:comp_sname/2
-    20:        <0.297.0> yaws_server:comp_sname/2
-```
