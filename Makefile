@@ -30,7 +30,7 @@ test: $(TBEAM)
 
 clean:
 	rm -f ebin/*.beam
-	./rebar3 clean --all
+	rm -rf _build
 
 # -----------------------
 # D E P E N D E N C I E S
@@ -60,8 +60,7 @@ pp_record-dep:
 	if [ ! -d deps/pp_record ]; then \
 	  cd deps; \
 	  git clone https://github.com/etnt/pp_record.git; \
-	  cp ../rebar3 pp_record; \
-	  make -C pp_record all; \
+	  make -C pp_record old; \
 	fi
 
 rm-deps:
