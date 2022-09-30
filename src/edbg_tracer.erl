@@ -477,7 +477,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, NewTlist ,Buf);
 
         top ->
-            NewTlist = list_trace(Tlist#tlist{at = 1}, Buf),
+            NewTlist = list_trace(Tlist#tlist{at = 0}, Buf),
             ?MODULE:tloop(X, NewTlist, Buf);
 
         bottom ->
