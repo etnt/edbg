@@ -62,6 +62,7 @@
          s/3,
          step/1,
          step/3,
+         suptrees/0,
          t/2,
          t/3,
          tlist/0,
@@ -128,6 +129,9 @@ fstart(ModFunList, Options) ->
 
 fstop() ->
     edbg_tracer:fstop().
+
+suptrees() ->
+    edbg_sup_trees:start().
 
 tquit() ->
     edbg_tracer:tquit().

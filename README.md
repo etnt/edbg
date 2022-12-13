@@ -5,10 +5,11 @@ A tty based interface to the Erlang debugger and tracer.
 ## Table of Contents
 1. [Install](#install)
 2. [Trace examples](#trace-examples)
-3. [Custom Color](#color)
-4. [Debug Usage](#dbg-usage)
-5. [Trace Usage](#trace-usage)
-6. [Debug examples](#dbg-examples)
+3. [Supervisor examples](#supervisor-examples)
+4. [Custom Color](#color)
+5. [Debug Usage](#dbg-usage)
+6. [Trace Usage](#trace-usage)
+7. [Debug examples](#dbg-examples)
 
 Useful if you, for example, work from home but still
 want to debug your code at your work desktop, or if you
@@ -366,6 +367,85 @@ By using the option 'memory', we will also track the memory usage.
 ```
 
 
+<a name="supervisor-examples"></a>
+## SUPERVISOR EXAMPLES
+
+``` erlang
+    # DISPLAY ALL SUPERVISORS WE HAVE FOUND.
+    # EACH LINE HAS A NUMBER THAT CAN BE REFERENCED.
+    # THE 'S' MEAN THAT THE PROCESS IS A SUPERVISOR.
+    (abc@ozzy)1> edbg:suptrees().
+    1:S kernel_safe_sup <0.74.0> []
+    2:S kernel_sup <0.49.0> [erl_distribution]
+    23:S logger_sup <0.75.0> []
+    27:S net_sup <0.57.0> []
+
+     (h)elp e(x)pand [<N>] (s)hrink [<N>]
+     (p)rocess info [<N> [<M>]] (b)acktrace [<N> [<M>]]
+     (r)efresh (q)uit
+
+    # LET US EXPAND SUPERVISOR 23 TO SEE ITS CHILDREN.
+    # NOTE THE INDENTATION AND THE 'W' WHICH MEAN: WORKER PROCESS
+    suptrees> x 23
+    1:S kernel_safe_sup <0.74.0> []
+    2:S kernel_sup <0.49.0> [erl_distribution]
+    23:S logger_sup <0.75.0> []
+    24:W   default <0.79.0> [logger_h_common]
+    25:W   logger_proxy <0.77.0> [logger_proxy]
+    26:W   logger_handler_watcher <0.76.0> [logger_handler_watcher]
+    27:S net_sup <0.57.0> []
+    
+    # PRINT THE PROCESS-INFO OF WORKER 24
+    # NOTE THE LIST OF LINKED PROCESSES 
+    suptrees> p 24
+    
+    === Process Info: <0.79.0>
+    [{registered_name,logger_std_h_default},
+     {current_function,{gen_server,loop,7}},
+     {initial_call,{proc_lib,init_p,5}},
+     {status,waiting},
+     {message_queue_len,0},
+     {links,[<0.75.0>,<0.80.0>]},
+     {dictionary,
+         [{'$ancest...snip...  
+         
+    # WE CAN ALSO PRINT THE PROCESS INFO OF ANY LINKED PROCESSES.
+    # LET US PRINT THE PROESS-INFO OF THE SECOND PROCESS IN THE LINKS LIST.
+    suptrees> p 24 2
+    
+    === Process Info: <0.80.0>
+    [{current_function,{logger_std_h,file_ctrl_loop,1}},
+     {initial_call,{erlang,apply,2}},
+     {status,waiting},
+     {message_queue_len,0},
+     {links,[<0.79.0>]},
+     {diction.....snip...
+     
+    # WE CAN CONTINUE LIKE THIS...
+    suptrees> p 24 2 1
+    
+    === Process Info: <0.79.0>
+    [{registered_name,logger_std_h_default},
+     {current_function,{gen_server,loop,7}},
+     {initial_call,{proc_lib,init_p,5}},
+     {status,waiting},
+     {message_queue_len,0},
+     {links,[<0.75.0>,<0.80.0>]},
+     {dictionary,....snip...
+     
+    # WE CAN ALSO PRINT THE PROCESS BACKTRACE IN THE SAME WAY
+    suptrees> b 24 2 
+    
+    === Process Backtrace: <0.80.0>
+    Program counter: 0x00007f73c42c00d0 (logger_std_h:file_ctrl_loop/1 + 56)
+    CP: 0x0000000000000000 (invalid)
+    
+    0x00007f73c420d618 Return addr 0x000055c399710288 (<terminate process normally>)
+    y(0)     []
+    y(1)     []
+    y(2)     #{dev=>standard_io,handler_name=>default}
+```
+
 <a name="color"></a>
 ## CUSTOM COLOR
 Custom colors may be set using the environment variable EDBG_COLOR.
@@ -627,6 +707,18 @@ Stop and quit the edbg tracer.
 ### edbg:lts()
 Load the latest trace-start setup from file.
 
+
+<a name="supervision-usage"></a>
+## SUPERVISION USAGE
+By invoking the `edbg:suptrees()` function from the Erlang shell,
+you will enter the supervision tree browser; a way to quickly
+get an overview of your system by listing the running supervisors.
+
+The browser makes it possible to browse through the tree of supervisors
+as well as any linked processes. At any point, a process can have its
+(default) process-info data printed as well as its backtrace.
+
+See the [Supervisor examples](#supervisor-examples) for how to use it.
 
 <a name="dbg-examples"></a>
 ## DEBUG EXAMPLES
