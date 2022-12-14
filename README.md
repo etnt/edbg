@@ -9,6 +9,7 @@ A tty based interface to the Erlang debugger and tracer.
 4. [Custom Color](#color)
 5. [Debug Usage](#dbg-usage)
 6. [Trace Usage](#trace-usage)
+6. [Supervisor Usage](#supervisor-usage)
 7. [Debug examples](#dbg-examples)
 
 Useful if you, for example, work from home but still
@@ -410,7 +411,7 @@ By using the option 'memory', we will also track the memory usage.
          [{'$ancest...snip...  
          
     # WE CAN ALSO PRINT THE PROCESS INFO OF ANY LINKED PROCESSES.
-    # LET US PRINT THE PROESS-INFO OF THE SECOND PROCESS IN THE LINKS LIST.
+    # LET US PRINT THE PROCESS-INFO OF THE SECOND PROCESS IN THE LINKS LIST.
     suptrees> p 24 2
     
     === Process Info: <0.80.0>
@@ -708,7 +709,7 @@ Stop and quit the edbg tracer.
 Load the latest trace-start setup from file.
 
 
-<a name="supervision-usage"></a>
+<a name="supervisor-usage"></a>
 ## SUPERVISION USAGE
 By invoking the `edbg:suptrees()` function from the Erlang shell,
 you will enter the supervision tree browser; a way to quickly
