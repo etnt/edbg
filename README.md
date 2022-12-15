@@ -386,14 +386,15 @@ By using the option 'memory', we will also track the memory usage.
      (r)efresh (q)uit
 
     # LET US EXPAND SUPERVISOR 23 TO SEE ITS CHILDREN.
-    # NOTE THE INDENTATION AND THE 'W' WHICH MEAN: WORKER PROCESS
+    # NOTE THE INDENTATION AND THE 'G' WHICH MEAN: GEN_SERVER PROCESS
+    # ('W' MEAN: SOME OTHER WORKER PROCESS)
     suptrees> x 23
     1:S kernel_safe_sup <0.74.0> []
     2:S kernel_sup <0.49.0> [erl_distribution]
     23:S logger_sup <0.75.0> []
-    24:W   default <0.79.0> [logger_h_common]
-    25:W   logger_proxy <0.77.0> [logger_proxy]
-    26:W   logger_handler_watcher <0.76.0> [logger_handler_watcher]
+    24:G   default <0.79.0> [logger_h_common]
+    25:G   logger_proxy <0.77.0> [logger_proxy]
+    26:G   logger_handler_watcher <0.76.0> [logger_handler_watcher]
     27:S net_sup <0.57.0> []
     
     # PRINT THE PROCESS-INFO OF WORKER 24
@@ -454,6 +455,34 @@ By using the option 'memory', we will also track the memory usage.
       ...do stuff, crunch...
       
     Monitor got DOWN from: <0.343.0> , Reason: shutdown
+
+    # WE CAN PRINT THE STATE OF A GEN_SERVER.
+    # LET SAY WE HAVE THE FOLLOWING:
+    1:S kernel_safe_sup <0.74.0> []
+    2:S kernel_sup <0.49.0> [erl_distribution]
+    3:S   logger_sup <0.75.0> []
+    4:G     default <0.79.0> [logger_h_common]
+      ....snip...
+
+    # NOW PRINT THE STATE OF THE <0.79.0> GEN_SERVER PROCESS.
+    # NOTE THAT WE WILL TRY TO PRETTY PRINT IT IF POSSIBLE.
+    suptrees> g 4
+    
+    Process State: <0.79.0>
+    #{burst_limit_enable => true,burst_limit_max_count => 500,
+      burst_limit_window_time => 1000,burst_msg_count => 0,
+      burst_win_ts => -576460751792378,
+      cb_state =>
+          #{ctrl_sync_count => 20,filesync_repeat_interval => no_repeat,
+            handler_state => #{file_ctrl_pid => <0.80.0>,type => standard_io},
+            id => default,last_op => sync,module => logger_std_h},
+      drop_mode_qlen => 200,flush_qlen => 1000,id => logger_std_h_default,
+      idle => true,last_load_ts => -576460751792378,last_qlen => 0,mode => async,
+      mode_ref => #Ref<0.3359499227.323092491.38039>,module => logger_h_common,
+      overload_kill_enable => false,overload_kill_mem_size => 3000000,
+      overload_kill_qlen => 20000,overload_kill_restart_after => 5000,
+      sync_mode_qlen => 10}
+
 
 ```
 
@@ -728,6 +757,10 @@ get an overview of your system by listing the running supervisors.
 The browser makes it possible to browse through the tree of supervisors
 as well as any linked processes. At any point, a process can have its
 (default) process-info data printed as well as its backtrace.
+
+If the worker process is of type gen_server, gen_event or gen_statem,
+it is possible to pretty-print the State of the callback module that
+the worker process is maintaining.
 
 It is also possible to setup a process monitor on any process in order
 to get a notification printed if the process should terminate.

@@ -65,7 +65,9 @@
         {n = 0,  % enumeration number
          id,
          pid,
-         modules = []
+         modules = [],
+         is_gen_server = false,
+         gen_module
         }).
 
 
@@ -104,9 +106,10 @@ loop(Pid, Prompt, State0) ->
             ["x"++X] -> expand(X, State0);
             ["s"++X] -> shrink(X, State0);
             ["p"++X] -> pinfo(X, State0);
+            ["g"++X] -> gen_state(X, State0);
             ["b"++X] -> backtrace(X, State0);
             ["m"++X] -> setup_monitor(X, State0);
-            ["r"++_] -> refresh();
+            ["r"++_] -> help(show(refresh()));
             ["q"++_] -> Pid ! quit, exit(normal);
 
             _X ->
@@ -154,15 +157,24 @@ display(Chars,
 display(Chars, [#worker{n = N,
                         id = Id,
                         pid = Pid,
+                        is_gen_server = IsGenSrv,
                         modules = Modules}|Tail], Indent) ->
     Pad = indent(Indent),
-    io:format("~p:~s ~s~p ~p ~p~n", [N, ?c_warn("W"), Pad, Id, Pid, Modules]),
+    io:format("~p:~s ~s~p ~p ~p~n", [N, ?c_warn(wg(IsGenSrv)), Pad, Id, Pid, Modules]),
     display(Chars, Tail, Indent);
 display(_, [], _) ->
     ok.
 
+wg(true = _IsGenSrv) -> "G";
+wg(_)                -> "W".
+
+
 indent(N) ->
     string:copies(" ", N).
+
+help(State) ->
+    print_help(),
+    State.
 
 help(_, State) ->
     print_help(),
@@ -172,6 +184,58 @@ help(_, State) ->
 get_pid(#sup_tree{pid = Pid}) -> Pid;
 get_pid(#worker{pid = Pid})   -> Pid;
 get_pid(Pid) when is_pid(Pid) -> Pid.
+
+
+gen_state(Chars, #state{sup_trees = SupTrees} = State) ->
+    try
+        case parse_ints(Chars) of
+            [I] ->
+                do(SupTrees, I, fun(X) -> do_pinfo(X, fun p_gen_state/1) end),
+                State;
+            [I | Ints] ->
+                do(SupTrees, I, fun(X) -> do_linfo(Ints, X,  fun p_gen_state/1) end),
+                State
+        end
+    catch
+        _:_ ->
+            show(State)
+    end.
+
+%% Print the State reord of the callback module that
+%% the gen_server is holding. Try to pretty-print it
+%% if possible.
+p_gen_state(Pid) when is_pid(Pid) ->
+    try
+        State = sys:get_state(Pid, 100),
+        UsePpRecord = is_pp_record_available(),
+        print_gen_state(Pid, State, UsePpRecord)
+    catch
+        _:_ ->
+            ok
+    end;
+p_gen_state(_) ->
+    ok.
+
+print_gen_state(Pid, State, false = _UsePpRecord) ->
+    io:format("~n~s ~p~n~p~n", [?c_warn("Process State:"),Pid, State]);
+print_gen_state(Pid, State, true = _UsePpRecord) ->
+    try
+        {ok, {Mod,_,_}} = get_initial_call(Pid),
+        Fname = edbg:find_source(Mod),
+        {ok, Defs} = pp_record:read(Fname),
+        io:format("~n~s~n", [pp_record:print(State, Defs)])
+    catch
+        _:_ ->
+            print_gen_state(Pid, State, false)
+    end.
+
+is_pp_record_available() ->
+    case code:ensure_loaded(pp_record) of
+        {module, pp_record} ->
+            true;
+        _ ->
+            false
+    end.
 
 
 setup_monitor(Chars, #state{sup_trees = SupTrees} = State) ->
@@ -363,7 +427,7 @@ parse_ints(Chars) ->
 print_help() ->
     S1 = " (h)elp e(x)pand [<N>] (s)hrink [<N>]",
     S2 = " (p)rocess info [<N> [<M>]] (b)acktrace [<N> [<M>]]",
-    S3 = " (m)onitor [<N> [<M>]]",
+    S3 = " (m)onitor [<N> [<M>]] (g)en-state [<N> [<M>]]",
     S4 = " (r)efresh (q)uit",
     S = io_lib:format("~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4]),
     ?info_msg(?help_hi(S), []).
@@ -390,7 +454,11 @@ supervisors(_Supervisor, SupTree) ->
                                                      Cs ++
                                                      [supervisors(Id,  new_sup_tree(Id, Pid))]};
                            ({Id, Pid, Type, Modules}, AccTree) when Type == worker ->
-                                Entry = #worker{id = Id, pid = Pid, modules = Modules},
+                                {IsGenSrv, Gmod} = is_gen_server(Pid),
+                                Entry = #worker{id = Id, pid = Pid,
+                                                is_gen_server = IsGenSrv,
+                                                gen_module = Gmod,
+                                                modules = Modules},
                                 Cs = AccTree#sup_tree.children,
                                 AccTree#sup_tree{children = Cs ++ [Entry]};
                            (Entry, AccTree) ->
@@ -401,6 +469,23 @@ supervisors(_Supervisor, SupTree) ->
             SupTree
     end.
 
+%% Is the given process of type: gen_server, gen_statem or gen_event?
+%% We will use this info to enable extration of the State using
+%% the sys:get_state/2 function
+is_gen_server(Pid) when is_pid(Pid) ->
+    case erlang:process_info(Pid, current_function) of
+        {current_function, {M , _Fun, _NoOfArgs}}
+        when M == gen_server orelse
+             M == gen_statem orelse
+             M == gen_event ->
+            {true, M};
+        _ ->
+            {false, undefined}
+    end;
+is_gen_server(_) ->
+    {false, undefined}.
+
+
 %% Try to find all Supervisors in the system.
 %% Idea: Go through all registered processes and
 %% try to figure out if they are a supervisor.
@@ -409,26 +494,28 @@ supervisors(_Supervisor, SupTree) ->
 all_sup_trees() ->
     Sups = lists:foldr(
              fun(Id,Acc) ->
-                     case process_info(whereis(Id), dictionary) of
-                         {dictionary,L} ->
-                             case lists:keyfind('$initial_call', 1, L) of
-                                 {'$initial_call',{supervisor,_,_}} ->
-                                     [Id|Acc];
-                                 _ ->
-                                     Acc
-                             end;
+                     case get_initial_call(whereis(Id)) of
+                         {ok, {supervisor,_,_}} ->
+                             [Id|Acc];
                          _ ->
                              Acc
                      end
              end, [], lists:sort(erlang:registered())),
     [supervisors(Id) || Id <- Sups].
 
-    %% SupTree#sup_tree{children =
-    %%                      [supervisors(Id,  new_sup_tree(Id, Pid)) ||
-    %%                          {Id, Pid, Type, _Modules}
-    %%                              <- supervisor:which_children(SupTree#sup_tree.pid),
-    %%                          Type == supervisor,
-    %%                          is_pid(Pid) == true]}.
+
+get_initial_call(Pid) when is_pid(Pid) ->
+    case process_info(Pid, dictionary) of
+        {dictionary,L} ->
+            case lists:keyfind('$initial_call', 1, L) of
+                {'$initial_call', Icall} ->
+                    {ok, Icall};
+                _ ->
+                    false
+            end;
+        _ ->
+            false
+    end.
 
 
 new_sup_tree(SupervisorId) ->
