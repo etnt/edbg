@@ -105,6 +105,7 @@ loop(Pid, Prompt, State0) ->
             ["s"++X] -> shrink(X, State0);
             ["p"++X] -> pinfo(X, State0);
             ["b"++X] -> backtrace(X, State0);
+            ["m"++X] -> setup_monitor(X, State0);
             ["r"++_] -> refresh();
             ["q"++_] -> Pid ! quit, exit(normal);
 
@@ -173,15 +174,44 @@ get_pid(#worker{pid = Pid})   -> Pid;
 get_pid(Pid) when is_pid(Pid) -> Pid.
 
 
+setup_monitor(Chars, #state{sup_trees = SupTrees} = State) ->
+    try
+        case parse_ints(Chars) of
+            [I] ->
+                do(SupTrees, I, fun(X) -> do_pinfo(X, fun create_monitor/1) end),
+                State;
+            [I | Ints] ->
+                do(SupTrees, I, fun(X) -> do_linfo(Ints, X,  fun create_monitor/1) end),
+                State
+        end
+    catch
+        _:_ ->
+            show(State)
+    end.
+
+create_monitor(Pid) when is_pid(Pid) ->
+    F = fun() ->
+                ReqId = erlang:monitor(process, Pid),
+                io:format("~n~s ~p~n", [?c_warn("Monitoring:"),Pid]),
+                receive
+                    {'DOWN', ReqId, process, Pid, ExitReason} ->
+                        io:format("~n~s ~p , Reason: ~p~n",
+                                  [?c_err("Monitor got DOWN from:"),
+                                   Pid, ExitReason])
+                end
+        end,
+    erlang:spawn(F).
+
+
 
 pinfo(Chars, #state{sup_trees = SupTrees} = State) ->
     try
         case parse_ints(Chars) of
             [I] ->
-                do(SupTrees, I, fun(X) -> print_pinfo(X, fun out_pinfo/1) end),
+                do(SupTrees, I, fun(X) -> do_pinfo(X, fun out_pinfo/1) end),
                 State;
             [I | Ints] ->
-                do(SupTrees, I, fun(X) -> print_linfo(Ints, X,  fun out_pinfo/1) end),
+                do(SupTrees, I, fun(X) -> do_linfo(Ints, X,  fun out_pinfo/1) end),
                 State
         end
     catch
@@ -193,10 +223,10 @@ backtrace(Chars, #state{sup_trees = SupTrees} = State) ->
     try
         case parse_ints(Chars) of
             [I] ->
-                do(SupTrees, I, fun(X) -> print_pinfo(X, fun out_btrace/1) end),
+                do(SupTrees, I, fun(X) -> do_pinfo(X, fun out_btrace/1) end),
                 State;
             [I | Ints] ->
-                do(SupTrees, I, fun(X) -> print_linfo(Ints, X,  fun out_btrace/1) end),
+                do(SupTrees, I, fun(X) -> do_linfo(Ints, X,  fun out_btrace/1) end),
                 State
         end
     catch
@@ -207,12 +237,12 @@ backtrace(Chars, #state{sup_trees = SupTrees} = State) ->
 
 
 
-print_pinfo(X, OutFun) ->
+do_pinfo(X, OutFun) ->
     Pid = get_pid(X),
     OutFun(Pid),
     X.
 
-print_linfo([I], X, OutFun) ->
+do_linfo([I], X, OutFun) ->
     try
         Pid = get_pid(X),
         {links, Pids} = erlang:process_info(Pid, links),
@@ -222,16 +252,16 @@ print_linfo([I], X, OutFun) ->
     catch
         _:_ -> X
     end;
-print_linfo([H|T], X, OutFun) ->
+do_linfo([H|T], X, OutFun) ->
     try
         Pid = get_pid(X),
         {links, Pids} = erlang:process_info(Pid, links),
         LPid = lists:nth(H, Pids),
-        print_linfo(T, LPid, OutFun)
+        do_linfo(T, LPid, OutFun)
     catch
         _:_ -> X
     end;
-print_linfo([], X, _OutFun) ->
+do_linfo([], X, _OutFun) ->
     X.
 
 out_pinfo(Pid) when is_pid(Pid) ->
@@ -333,8 +363,9 @@ parse_ints(Chars) ->
 print_help() ->
     S1 = " (h)elp e(x)pand [<N>] (s)hrink [<N>]",
     S2 = " (p)rocess info [<N> [<M>]] (b)acktrace [<N> [<M>]]",
-    S3 = " (r)efresh (q)uit",
-    S = io_lib:format("~n~s~n~s~n~s~n",[S1,S2,S3]),
+    S3 = " (m)onitor [<N> [<M>]]",
+    S4 = " (r)efresh (q)uit",
+    S = io_lib:format("~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4]),
     ?info_msg(?help_hi(S), []).
 
 

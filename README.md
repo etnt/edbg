@@ -445,6 +445,16 @@ By using the option 'memory', we will also track the memory usage.
     y(0)     []
     y(1)     []
     y(2)     #{dev=>standard_io,handler_name=>default}
+    
+    # WE CAN ALSO SETUP A MONITOR FOR A PROCESS
+    suptrees> m 161 2
+    
+    Monitoring: <0.343.0>
+    
+      ...do stuff, crunch...
+      
+    Monitor got DOWN from: <0.343.0> , Reason: shutdown
+
 ```
 
 <a name="color"></a>
@@ -718,6 +728,9 @@ get an overview of your system by listing the running supervisors.
 The browser makes it possible to browse through the tree of supervisors
 as well as any linked processes. At any point, a process can have its
 (default) process-info data printed as well as its backtrace.
+
+It is also possible to setup a process monitor on any process in order
+to get a notification printed if the process should terminate.
 
 See the [Supervisor examples](#supervisor-examples) for how to use it.
 
