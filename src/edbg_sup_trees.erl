@@ -41,7 +41,9 @@
 
 -record(state,
         {
-         sup_trees = []
+         sup_trees = [],
+         trace_started = false,
+         traced_pid
         }).
 
 %% Regarding the 'modules' entry:
@@ -92,8 +94,7 @@ ploop(Prompt) ->
 prompt(Pid) when is_pid(Pid) ->
     process_flag(trap_exit, true),
     State0 = refresh(),
-    State = show(State0),
-    print_help(),
+    State = help(show(State0)),
     loop(Pid, prompt(), State).
 
 
@@ -101,16 +102,18 @@ loop(Pid, Prompt, State0) ->
     io:format("~n",[]),
     State =
         case string:tokens(io:get_line(Prompt), "\n") of
-            ["h"++X] -> help(X, State0);
-            ["d"++X] -> show(X, State0);
-            ["x"++X] -> expand(X, State0);
-            ["s"++X] -> shrink(X, State0);
-            ["p"++X] -> pinfo(X, State0);
-            ["g"++X] -> gen_state(X, State0);
-            ["b"++X] -> backtrace(X, State0);
-            ["m"++X] -> setup_monitor(X, State0);
-            ["r"++_] -> help(show(refresh()));
-            ["q"++_] -> Pid ! quit, exit(normal);
+            ["h"++X]  -> help(X, State0);
+            ["x"++X]  -> help(expand(X, State0));
+            ["s"++X]  -> shrink_or_show(X, State0);
+            ["p"++X]  -> pinfo(X, State0);
+            ["g"++X]  -> gen_state(X, State0);
+            ["b"++X]  -> backtrace(X, State0);
+            ["m"++X]  -> setup_monitor(X, State0);
+            ["r"++_]  -> help(show(refresh()));
+            ["ts"++X] -> start_trace(X, State0);
+            ["te"++_] -> stop_trace(State0);
+            ["tf"++_] -> show(show_trace(State0));
+            ["q"++_]  -> Pid ! quit, exit(normal);
 
             _X ->
                 ?info_msg("prompt got: ~p~n",[_X]),
@@ -238,6 +241,62 @@ is_pp_record_available() ->
     end.
 
 
+start_trace(Chars, #state{trace_started = false, sup_trees = SupTrees} = State) ->
+    try
+        case parse_ints(Chars) of
+            [I] ->
+                do(SupTrees, I, fun(X) -> do_pinfo(X, fun do_trace/1) end),
+                store_traced_pid(State);
+            [I | Ints] ->
+                do(SupTrees, I, fun(X) -> do_linfo(Ints, X,  fun do_trace/1) end),
+                store_traced_pid(State)
+        end
+    catch
+        _:_ ->
+            State
+    end;
+start_trace(_Chars, #state{trace_started = true, traced_pid = Pid} = State) ->
+    io:format("~n~s ~s ~p~n",[?c_err("<ERROR>"),"Already tracing on Pid:",Pid]),
+    State.
+
+store_traced_pid(State) ->
+    case get(traced_pid) of
+        Pid when is_pid(Pid) ->
+            State#state{trace_started = true, traced_pid = Pid};
+        _ ->
+            State
+    end.
+
+do_trace(Pid) when is_pid(Pid) ->
+    edbg:fstart([], [{trace_spec,Pid},
+                     dump_output_eager,
+                     send_receive,
+                     {max_msgs, 1000000}]),
+    put(traced_pid, Pid),
+    io:format("~n~s ~s ~p~n",[?c_warn("<INFO>"),"Tracing on Pid:",Pid]).
+
+
+stop_trace(#state{trace_started = true, traced_pid = Pid} = State) ->
+    edbg:fstop(),
+    io:format("~n~s ~s ~p~n",[?c_warn("<INFO>"),"Stopped tracing on Pid:",Pid]),
+    State#state{trace_started = false, traced_pid = undefined};
+stop_trace(State) ->
+    %% In case suptree was stopped/started and
+    %% perhaps even the shells proc.dict was erased;
+    Pid = case erase(traced_pid) of
+              Pid0 when is_pid(Pid0) -> Pid0;
+              _ ->
+                  edbg_tracer:get_traced_pid()
+          end,
+    edbg:fstop(),
+    io:format("~n~s ~s ~p~n",[?c_warn("<INFO>"),"Stopped tracing on Pid:",Pid]),
+    State#state{trace_started = false, traced_pid = undefined}.
+
+show_trace(State) ->
+    edbg:file(),
+    State.
+
+
 setup_monitor(Chars, #state{sup_trees = SupTrees} = State) ->
     try
         case parse_ints(Chars) of
@@ -256,15 +315,17 @@ setup_monitor(Chars, #state{sup_trees = SupTrees} = State) ->
 create_monitor(Pid) when is_pid(Pid) ->
     F = fun() ->
                 ReqId = erlang:monitor(process, Pid),
-                io:format("~n~s ~p~n", [?c_warn("Monitoring:"),Pid]),
+                io:format("~n~s ~s ~p~n",[?c_warn("<INFO>"),"Monitoring:",Pid]),
                 receive
                     {'DOWN', ReqId, process, Pid, ExitReason} ->
-                        io:format("~n~s ~p , Reason: ~p~n",
-                                  [?c_err("Monitor got DOWN from:"),
+                        io:format("~n~s ~s ~p , Reason: ~p~n",
+                                  [?c_warn("<INFO>"),"Monitor got DOWN from:",
                                    Pid, ExitReason])
                 end
         end,
-    erlang:spawn(F).
+    erlang:spawn(F);
+create_monitor(_) ->
+    ok.
 
 
 
@@ -342,17 +403,17 @@ expand(Chars, #state{sup_trees = SupTrees0} = State) ->
         show(State#state{sup_trees = SupTrees})
     catch
         _:_ ->
-            show(State)
+            help(show(State))
     end.
 
-shrink(Chars, #state{sup_trees = SupTrees0} = State) ->
+shrink_or_show(Chars, #state{sup_trees = SupTrees0} = State) ->
     try
         I = parse_int(Chars),
         SupTrees = set_expand(SupTrees0, I, false),
-        show(State#state{sup_trees = SupTrees})
+        help(show(State#state{sup_trees = SupTrees}))
     catch
         _:_ ->
-            show(State)
+            help(show(State))
     end.
 
 
@@ -425,11 +486,12 @@ parse_ints(Chars) ->
 
 
 print_help() ->
-    S1 = " (h)elp e(x)pand [<N>] (s)hrink [<N>]",
-    S2 = " (p)rocess info [<N> [<M>]] (b)acktrace [<N> [<M>]]",
-    S3 = " (m)onitor [<N> [<M>]] (g)en-state [<N> [<M>]]",
-    S4 = " (r)efresh (q)uit",
-    S = io_lib:format("~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4]),
+    S1 = " (h)elp e(x)pand [<N>] (s)hrink [<N>] (s)how",
+    S2 = " (p)rocess info [<N> ]+ (b)acktrace [<N> ]+",
+    S3 = " (m)onitor [<N> ]+ (g)en-state [<N> ]+",
+    S4 = " (ts)start-trace [<N> ]+ (te)end-trace (tf)show-trace",
+    S5 = " (r)efresh (q)uit",
+    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4,S5]),
     ?info_msg(?help_hi(S), []).
 
 

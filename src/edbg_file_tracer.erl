@@ -30,6 +30,7 @@
          , dump_output_lazy_f/0
          , fname/2
          , get_config/0
+         , get_trace_spec/0
          , load_config/0
          , log_file_f/1
          , max_msgs_f/1
@@ -133,6 +134,9 @@ set_config(Funs, State)
     NewState = lists:foldl(fun(F,S) -> F(S) end, State, Funs),
     call({set_config, NewState}).
 
+get_trace_spec() ->
+    call(get_trace_spec).
+
 log_file_f(LogFile)
   when is_list(LogFile) ->
     fun(State) -> State#state{log_file = LogFile} end.
@@ -208,6 +212,10 @@ handle_call({set_config, State}, _From, _State) ->
 handle_call(load_config, _From, _State) ->
     State = get_file_config(?cfg_file),
     Reply = ok,
+    {reply, Reply, State};
+
+handle_call(get_trace_spec, _From, State) ->
+    Reply = State#state.trace_spec,
     {reply, Reply, State};
 
 handle_call(start_trace, _From, #state{tracer = Pid, trace_time = Time} = State)

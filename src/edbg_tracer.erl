@@ -6,6 +6,7 @@
          , fstart/1
          , fstart/2
          , fstop/0
+         , get_traced_pid/0
          , lts/0
          , send/2
          , start_my_tracer/0
@@ -26,6 +27,7 @@
          , dump_output_lazy_f/0
          , fname/2
          , get_config/0
+         , get_trace_spec/0
          , log_file_f/1
          , max_msgs_f/1
          , memory_f/0
@@ -181,6 +183,13 @@ fstart(ModFunList, Options)
 fstop() ->
     edbg_file_tracer:stop_trace(),
     edbg_file_tracer:stop().
+
+
+get_traced_pid() ->
+    case get_trace_spec() of
+        Pid when is_pid(Pid) -> Pid;
+        _                    -> undefined
+    end.
 
 
 tstart() ->

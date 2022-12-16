@@ -396,7 +396,8 @@ By using the option 'memory', we will also track the memory usage.
     25:G   logger_proxy <0.77.0> [logger_proxy]
     26:G   logger_handler_watcher <0.76.0> [logger_handler_watcher]
     27:S net_sup <0.57.0> []
-    
+
+
     # PRINT THE PROCESS-INFO OF WORKER 24
     # NOTE THE LIST OF LINKED PROCESSES 
     suptrees> p 24
@@ -434,7 +435,8 @@ By using the option 'memory', we will also track the memory usage.
      {message_queue_len,0},
      {links,[<0.75.0>,<0.80.0>]},
      {dictionary,....snip...
-     
+
+
     # WE CAN ALSO PRINT THE PROCESS BACKTRACE IN THE SAME WAY
     suptrees> b 24 2 
     
@@ -446,7 +448,8 @@ By using the option 'memory', we will also track the memory usage.
     y(0)     []
     y(1)     []
     y(2)     #{dev=>standard_io,handler_name=>default}
-    
+
+
     # WE CAN ALSO SETUP A MONITOR FOR A PROCESS
     suptrees> m 161 2
     
@@ -455,6 +458,7 @@ By using the option 'memory', we will also track the memory usage.
       ...do stuff, crunch...
       
     Monitor got DOWN from: <0.343.0> , Reason: shutdown
+
 
     # WE CAN PRINT THE STATE OF A GEN_SERVER.
     # LET SAY WE HAVE THE FOLLOWING:
@@ -484,6 +488,17 @@ By using the option 'memory', we will also track the memory usage.
       sync_mode_qlen => 10}
 
 
+    # YOU CAN START TRACING ON A PROCESS LIKE THIS
+    suptrees> ts 4
+    
+      ...do stuff while tracing...
+      
+    # ...STOP THE TRACING...
+    suptrees> te
+    
+    # ...SHOW THE TRACE OUTPUT (LIKE: edbg:file/0)
+    suptrees> tf
+ 
 ```
 
 <a name="color"></a>
@@ -764,6 +779,11 @@ the worker process is maintaining.
 
 It is also possible to setup a process monitor on any process in order
 to get a notification printed if the process should terminate.
+
+Note that the (edbg) tracing is built-in; i.e you can start tracing 
+on any process you can access from the supervision browser.
+This will trace all modules that are executing within the process
+as well as any messages sent/received from/to the process.
 
 See the [Supervisor examples](#supervisor-examples) for how to use it.
 
