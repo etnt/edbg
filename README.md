@@ -1,6 +1,6 @@
 # E D B G
 
-A tty based interface to the Erlang debugger and tracer.
+A tty based interface to the Erlang debugger/tracer and supervisors.
 
 ## Table of Contents
 1. [Install](#install)
@@ -14,17 +14,23 @@ A tty based interface to the Erlang debugger and tracer.
 
 Useful if you, for example, work from home but still
 want to debug your code at your work desktop, or if you
-simply don't like the standard debugger GUI.
-
-Note that lots of the debugger functionality is already supported by the
-standard OTP `int.erl` module. What the edbg debugger brings is basically the
-tty based attached mode and the possibility to make use of interactively
-defined conditional break points.
+simply don't like GUI's.
 
 The edbg tracing functionality is (hopefully) a somewhat more novel approach
 and actually is what I myself is using all the time. In fact it is so good that
 I now have moved the Trace Example chapter just below the Installation ditto.
 It is all you need... ;-)
+
+By invoking the Supervisor Browser from the Erlang shell,
+you can quickly get an overview of your system by listing
+the running supervisors and digging out various info from
+them as well as initiate tracing.
+
+A lot of the debugger functionality is already supported by the
+standard OTP `int.erl` module. What the edbg debugger brings is basically the
+tty based attached mode and the possibility to make use of interactively
+defined conditional break points.
+
 
 <a name="install"></a>
 ## INSTALL
