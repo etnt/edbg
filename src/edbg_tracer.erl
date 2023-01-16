@@ -2,6 +2,7 @@
 
 -export([file/0
          , file/1
+         , fhelp/0
          , fstart/0
          , fstart/1
          , fstart/2
@@ -102,6 +103,34 @@ start_my_tracer() ->
             register(?mytracer, Pid),
             Pid
     end.
+
+fhelp() ->
+    S = "\n"
+    "edbg:fstart(ModFunList, Opts)\n"
+    "edbg:fstop()\n"
+    "edbg:file()\n"
+    "edbg:file(FileName)\n"
+    "\n"
+    "ModFunList is a list of module names (atoms) or tuples {ModName, FunName}.\n"
+    "\n"
+    "Opts is a list of option tuples:\n"
+    "\n"
+    "{log_file, FileName}     : file where to store trace output\n"
+    "                           default is: edbg.trace_result\n"
+    "{max_msgs, MaxNumOfMsgs} : max number of trace messages\n"
+    "                           default = 1000\n"
+    "{trace_time, Seconds}    : max time to trace\n"
+    "                           default = 10 seconds\n"
+    "{trace_spec, Spec}       : see the erlang:trace/3 docs\n"
+    "                           default = all\n"
+    "dump_output_eager        : trace output goes to file often\n"
+    "dump_output_lazy         : trace output goes to file when done (default)\n"
+    "monotonic_ts             : show the elapsed monotonic nano seconds\n"
+    "send_receive             : trace send/receive messages from 'known' pids\n"
+    "memory                   : track the memory usage of the 'known' pids\n",
+    io:format("~s~n",[S]).
+
+
 
 %% dbg:tracer(process,{fun(Trace,N) ->
 %%                        io:format("TRACE (#~p): ~p~n",[N,Trace]),

@@ -29,6 +29,7 @@
          enable_break/2,
          file/0,
          file/1,
+         fhelp/0,
          fstart/0,
          fstart/1,
          fstart/2,
@@ -129,6 +130,9 @@ fstart(ModFunList, Options) ->
 
 fstop() ->
     edbg_tracer:fstop().
+
+fhelp() ->
+    edbg_tracer:fhelp().
 
 suptrees() ->
     edbg_sup_trees:start().
