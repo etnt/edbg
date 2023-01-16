@@ -745,29 +745,8 @@ As edbg:file/1 but use the default trace output filename.
 ### edbg:fstop()
 Stop tracing and dump the trace output to file.
 
-### edbg:tstart(Mod, Mods [,Opts])
-This is an older and obsoleted interface for starting the tracing.
-Start tracing the first time `Mod` (an atom) is called, in any process,
-and in any spawned process from such a process.
-Do also trace any call to the modules `Mods` (list of atoms).
-
-`Opts` is a list of any of the following options:
-
-* `{setup_mod, Mod}` : the module that will setup the tracing; default is `edbg_trace_filter`.
-* `{trace_max}` : max number of trace messages; default is 10000.
-
-The trace-start setup will automatically be stored on file
-for easy reload.
-
-### edbg:tlist()
-Enter trace list mode, where the trace output can be inspected.
-
-### edbg:tquit()
-Stop and quit the edbg tracer.
-
-### edbg:lts()
-Load the latest trace-start setup from file.
-
+### edbg:fhelp()
+Prints the available options.
 
 <a name="supervisor-usage"></a>
 ## SUPERVISION USAGE
