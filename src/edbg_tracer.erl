@@ -85,7 +85,8 @@
           current = 1,
           page = 20,
           send_receive = true, % do (not) show send/receive msgs
-          memory = true        % do (not) show memory info
+          memory = true,       % do (not) show memory info
+          bs = erl_eval:new_bindings()
          }).
 
 
@@ -274,6 +275,14 @@ prompt(Pid) when is_pid(Pid) ->
 
 rloop(Pid, Prompt) ->
     case string:tokens(io:get_line(Prompt), "\n") of
+        ["eval"++X] -> xeval(?mytracer, X);
+        ["xnall"++X] -> xnall(?mytracer, X);
+        ["xall"++X] -> xall(?mytracer, X);
+        ["let"++X] -> xlet(?mytracer, X);
+        ["set"++X] -> xset(?mytracer, X);
+        ["off"++X]-> off(?mytracer, X);
+        ["on"++X]-> on(?mytracer, X);
+        ["pr"++X]-> show_record(?mytracer, X);
         ["d"++_] -> ?mytracer ! down;
         ["u"++_] -> ?mytracer ! up;
         ["t"++_] -> ?mytracer ! top;
@@ -283,11 +292,8 @@ rloop(Pid, Prompt) ->
         ["s"++X] -> show(?mytracer, X);
         ["r"++X] -> show_return(?mytracer, X);
         ["w"++X] -> show_raw(?mytracer, X);
-        ["pr"++X]-> show_record(?mytracer, X);
         ["p"++X] -> set_page(?mytracer, X);
         ["h"++_] -> print_help();
-        ["on"++X]-> on(?mytracer, X);
-        ["off"++X]-> off(?mytracer, X);
         ["q"++_] -> Pid ! quit, exit(normal);
 
         _X ->
@@ -338,6 +344,76 @@ off(Pid, X) ->
             false
     end.
 
+%% Unload/Remove the current a module and re-load it from the code path!
+xnall(_Pid, X) ->
+    try
+        {ModStr, _} = get_first_token(string:strip(X, left)),
+        Module = list_to_atom(ModStr),
+        reload_module(Module),
+        c:m(Module),
+        true
+    catch
+        _:_ -> false
+    end.
+
+reload_module(Module) ->
+    case code:delete(Module) of
+        false ->
+            code:purge(Module),
+            code:delete(Module);
+        true ->
+            true
+    end,
+    {module, Module} = code:load_file(Module).
+
+
+
+
+%% Re-Compile and load a module with the export-all compiler option!
+xall(_Pid, X) ->
+    try
+        {ModStr, _} = get_first_token(string:strip(X, left)),
+        Module = list_to_atom(ModStr),
+        recompile_as_export_all(Module),
+        c:m(Module),
+        true
+    catch
+        _:_ -> false
+    end.
+
+recompile_as_export_all(Module) ->
+    Cs = Module:module_info(compile),
+    {source, SrcFname} = lists:keyfind(source, 1, Cs),
+    File = filename:rootname(SrcFname, ".erl"),
+    {ok, Module, Code} = compile:file(File, [export_all,binary]),
+    code:load_binary(Module, File, Code).
+
+xeval(Pid, X) ->
+    try
+        Pid ! {xeval, X}
+    catch
+        _:_ -> false
+    end.
+
+xlet(Pid, X) ->
+    try
+        {Var, ExprStr} = get_first_token(string:strip(X, left)),
+        Pid ! {xlet, Var, ExprStr}
+    catch
+        _:_ -> false
+    end.
+
+get_first_token(Str) ->
+    string:take(Str, " ", true, leading).
+
+xset(Pid, X) ->
+    try
+        [Var,A,B] = string:tokens(string:strip(X), " "),
+        Pid ! {xset, Var, list_to_integer(A), list_to_integer(B)}
+    catch
+        _:_ -> false
+    end.
+
 show(Pid, X) ->
     parse_integers(Pid, X, show).
 
@@ -378,7 +454,10 @@ print_help() ->
     S4 = " (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>",
     S5 = " (on)/(off) send_receive | memory",
     S6 = " (p)agesize <N> (q)uit",
-    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n",[S1,S2,S3,S4,S5,S6]),
+    S7 = " (set) <Var> <N> <ArgN>  (let) <Var> <Expr>",
+    S8 = " (eval) <Expr>  (xall/xnall) <Mod>",
+    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n",
+                      [S1,S2,S3,S4,S5,S6,S7,S8]),
     ?info_msg(?help_hi(S), []).
 
 
@@ -480,6 +559,64 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
                     ?err_msg("not found~n",[])
             end,
             ?MODULE:tloop(X, Tlist ,Buf);
+
+        {xset, Var, N, ArgN} ->
+            dbg:stop_clear(),
+            NewTlist =
+                try
+                    case lists:keyfind(N, 1, Buf) of
+                        {_,{trace, _Pid, call, MFA, _As}} ->
+                            Val = get_arg(ArgN, MFA),
+                            add_binding(Tlist, Var, Val);
+
+                        {_,{trace_ts, _Pid, call, MFA, _TS, _As}} ->
+                            Val = get_arg(ArgN, MFA),
+                            add_binding(Tlist, Var, Val);
+
+                        _ ->
+                            ?err_msg("not found~n",[]),
+                            Tlist
+                    end
+                catch
+                    _:_ ->
+                        ?err_msg("unexpected error~n",[]),
+                        Tlist
+                end,
+            ?MODULE:tloop(X, NewTlist ,Buf);
+
+        {xlet, Var, ExprStr} ->
+            dbg:stop_clear(),
+            NewTlist =
+                try
+                    {ok, Tokens, _} = erl_scan:string(ExprStr),
+                    {ok, Exprs} = erl_parse:parse_exprs(Tokens),
+                    {value, Result, _} = erl_eval:exprs(Exprs, Tlist#tlist.bs),
+                    ?info_msg("~p~n",[Result]),
+                    add_binding(Tlist, Var, Result)
+                catch
+                    _:_ ->
+                        ?err_msg("unexpected error~n",[]),
+                        Tlist
+                end,
+            ?MODULE:tloop(X, NewTlist ,Buf);
+
+        {xeval, ExprStr} ->
+            dbg:stop_clear(),
+            try
+                {ok, Tokens, _} = erl_scan:string(ExprStr),
+                {ok, Exprs} = erl_parse:parse_exprs(Tokens),
+                case catch erl_eval:exprs(Exprs, Tlist#tlist.bs) of
+                    {value, Result, _} ->
+                        ?info_msg("~p~n",[Result]);
+                    Else ->
+                        ?err_msg("~n~p~n",[Else])
+                end
+                catch
+                    _:Err ->
+                        ?err_msg("parse/eval error: ~n~p~n",[Err])
+                end,
+            ?MODULE:tloop(X, Tlist ,Buf);
+
 
         %% Find a matching function call
         {find, {Mstr,Fstr}} ->
@@ -595,6 +732,12 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             %%?info_msg("mytracer got: ~p~n",[_X]),
             ?MODULE:tloop(X, Tlist ,Buf)
     end.
+
+add_binding(#tlist{bs = Bs} = T, Var, Val) ->
+    T#tlist{bs = erl_eval:add_binding(list_to_atom(Var), Val, Bs)}.
+
+get_arg(ArgN, {_M,_F,A}) ->
+    lists:nth(ArgN, A).
 
 show_arg(ArgN, {M,F,A}) ->
     Sep = pad(35, $-),

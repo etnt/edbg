@@ -373,6 +373,97 @@ By using the option 'memory', we will also track the memory usage.
     20:        <0.297.0> yaws_server:comp_sname/2
 ```
 
+We can evaluate arbitrary Erlang expressions in order to
+explore alternatives to what was traced:
+
+```erlang
+   # HERE WE WILL USE THE COMMANDS: set/let/eval/xall/xnall , WHERE:
+   #  set   - Bind a variable to the specified argument value.
+   #  let   - Bind a variable to the result of evaluating an expression.
+   #  eval  - Evaluate an arbitrary expression.
+   #  xall  - Re-compile and load a module with the export-all flag set.
+   #  xnall - Delete the current module and reload it from the code path.
+   #
+   # THE COMMANDS AS SHOWN BY THE HELP COMMAND
+   tlist> h
+       ...snip..
+    (set) <Var> <N> <ArgN>  (let) <Var> <Expr>
+    (eval) <Expr>  (xall/xnall) <Mod>
+
+   # LET'S LOOK AT THE FOLLOWING FUNCTION
+   tlist> a 304
+    304:     <0.399.0> restconf:keymember/3
+    305:      <0.399.0> restconf:keymember/3
+
+   tlist> s 304
+    Call: restconf:keymember/3
+    -----------------------------------
+    keymember(Keys, Pos, [Tuple|Tuples]) ->
+
+   # FIRST WE STUDY THE ARGUMENT VALUES...
+   tlist> s 304 1
+    Call: restconf:keymember/3 , argument 1:
+    -----------------------------------
+    [streamcontent,streamcontent_with_timeout,get_more]
+
+   tlist> s 304 3
+    Call: restconf:keymember/3 , argument 3:
+    -----------------------------------
+    [{header,{"Last-Modified","Thu, 23 Feb 2023 08:36:23 GMT"}},
+     {header,{"Etag","W/\"1677-141382-981909+json\""}},
+     {status,201},
+     {header,["Location: ",
+              [["http","://","localhost",":8008"],
+               [47,114,101,115,116,99,111,110,102,47,"data",47,"example-jukebox",
+                58,"jukebox",[]]]]}]
+                
+   # ...AND WHAT THE FUNCTION RETURN
+   tlist> r 304
+    Call: restconf:keymember/3 , return value:
+    -----------------------------------
+    false
+    
+   # NOW LET US EXPLORE WHAT IT RETURNS IF 'status' WOULD
+   # HAVE BEEN PRESENT IN THE LIST OF THE FIRST ARGUMENT.
+   
+   # FIRST BIND A VARIABLE TO THE FIRST ARGUMENT VALUE
+   tlist> set Keys 304 1
+
+   # BIND A VARIABLE TO A LIST WHERE 'status' IS ADDED.
+   tlist> let MyKeys [status|Keys].
+   [status,streamcontent,streamcontent_with_timeout,get_more]
+   
+   # BIND A VARIABLE TO THE THIRD ARGUMENT VALUE
+   tlist> set Tuples 304 3
+
+   # MAKE A CALL TO THE FUNCTION WITH THE NEW ARGUMENT VALUES
+   tlist> eval restconf:keymember(MyKeys, 1, Tuples).
+    {'EXIT',{undef,[{restconf,keymember, ....snip...
+    
+   # SINCE THE FUNCTION IS NOT EXPORTED WE GET A CRASH;
+   # SO WE CAN NOW RECOMPILE AND LOAD THE MODULE WITH
+   # THE 'export-all' FLAG SET.
+   tlist> xall restconf
+    Module: restconf
+    MD5: 43cfd2bafb2e45b864ddbf90b7e2231f
+    Object file: /home/tobbe/work/git/trunk/lib/rest/src/restconf
+    Compiler options:  [debug_info,export_all,compressed]
+      ....snip...
+
+   # WE CAN NOW MAKE THE CALL TO THE FUNCTION
+   tlist> eval restconf:keymember(MyKeys, 1, Tuples).
+    true
+
+   # FINALLY, WE RELOAD THE ORIGINAL MODULE
+   tlist> xnall restconf
+    ....snip...
+
+   # CHECK THAT FUNCTION IS NOT EXPORTED
+   tlist> eval restconf:keymember(MyKeys, 1, Tuples).
+    {'EXIT',{undef,[{restconf,keymember, ...
+
+```
+
 
 <a name="supervisor-examples"></a>
 ## SUPERVISOR EXAMPLES
