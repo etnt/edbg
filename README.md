@@ -1,6 +1,6 @@
 # E D B G
 
-A tty based interface to the Erlang debugger/tracer and supervisors.
+A tty based interface to the Erlang debugger/tracer and supervisor tree browser.
 
 If you don't like GUI's, `edbg` may be your cup of tea.
 
