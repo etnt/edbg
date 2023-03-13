@@ -149,6 +149,21 @@ As edbg:file/1 but use the default trace output filename.
 ### edbg:fstop()
 Stop tracing and dump the trace output to file.
 
+### edbg:fpid(Pid)
+If you want to trace on a specific process you can use this function.
+You specify the `Pid` (Process Identifier) of the process you want to
+trace on. Calling `edbg:fpid/1` function is identical to calling:
+
+    edbg:fstart(Pid, [dump_output_eager,
+                      send_receive,
+                      {max_msgs, 1000000}]).
+                      
+To stop the tracing you just call `edbg:fstop/0`.                      
+
+### edbg:fpid(Pid, Options)
+Works as `edbg:fpid/1` but requires you to specify any options you
+may want to use.
+
 ### edbg:fhelp()
 Prints the available options.
 

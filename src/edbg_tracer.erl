@@ -111,6 +111,8 @@ fhelp() ->
     "edbg:fstop()\n"
     "edbg:file()\n"
     "edbg:file(FileName)\n"
+    "edbg:fpid(Pid)\n"
+    "edbg:fpid(Pid, Opts)\n"
     "\n"
     "ModFunList is a list of module names (atoms) or tuples {ModName, FunName}.\n"
     "\n"
@@ -408,8 +410,15 @@ get_first_token(Str) ->
 
 xset(Pid, X) ->
     try
-        [Var,A,B] = string:tokens(string:strip(X), " "),
-        Pid ! {xset, Var, list_to_integer(A), list_to_integer(B)}
+        case string:tokens(string:strip(X), " ") of
+            [Var,A] ->
+                %% Bind Var to Return-Value
+                Pid ! {xset, Var, list_to_integer(A)};
+
+            [Var,A,B] ->
+                %% Bind Var to Argument-Value
+                Pid ! {xset, Var, list_to_integer(A), list_to_integer(B)}
+        end
     catch
         _:_ -> false
     end.
@@ -454,7 +463,7 @@ print_help() ->
     S4 = " (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>",
     S5 = " (on)/(off) send_receive | memory",
     S6 = " (p)agesize <N> (q)uit",
-    S7 = " (set) <Var> <N> <ArgN>  (let) <Var> <Expr>",
+    S7 = " (set) <Var> <N> [<ArgN>]  (let) <Var> <Expr>",
     S8 = " (eval) <Expr>  (xall/xnall) <Mod>",
     S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n",
                       [S1,S2,S3,S4,S5,S6,S7,S8]),
@@ -560,6 +569,27 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             end,
             ?MODULE:tloop(X, Tlist ,Buf);
 
+        %% Set Variable to the specified Return-Value
+        {xset, Var, N} ->
+            dbg:stop_clear(),
+            NewTlist =
+                try
+                    case get_return_value(N, lists:reverse(Buf)) of
+                        {ok, {_M,_F,_Alen}, RetVal} ->
+                            add_binding(Tlist, Var, RetVal);
+
+                        not_found ->
+                            ?info_msg("~nNo return value found!~n",[]),
+                            Tlist
+                    end
+                catch
+                    _:_ ->
+                        ?err_msg("unexpected error~n",[]),
+                        Tlist
+                end,
+            ?MODULE:tloop(X, NewTlist ,Buf);
+
+        %% Set Variable to the specified Argument-Value
         {xset, Var, N, ArgN} ->
             dbg:stop_clear(),
             NewTlist =

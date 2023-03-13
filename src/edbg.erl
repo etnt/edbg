@@ -30,6 +30,8 @@
          file/0,
          file/1,
          fhelp/0,
+         fpid/1,
+         fpid/2,
          fstart/0,
          fstart/1,
          fstart/2,
@@ -130,6 +132,15 @@ fstart(ModFunList, Options) ->
 
 fstop() ->
     edbg_tracer:fstop().
+
+fpid(Pid) when is_pid(Pid) ->
+    fpid(Pid, [dump_output_eager,
+               send_receive,
+               {max_msgs, 1000000}]).
+
+fpid(Pid, Options) when is_pid(Pid) andalso is_list(Options) ->
+    edbg:fstart([], [{trace_spec,Pid} | Options]),
+    io:format("~n~s ~s ~p~n",[?c_warn("<INFO>"),"Tracing on Pid:",Pid]).
 
 fhelp() ->
     edbg_tracer:fhelp().
