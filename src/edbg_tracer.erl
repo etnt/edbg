@@ -49,6 +49,8 @@
          rloop/2
         ]).
 
+-include("edbg_trace.hrl").
+
 
 -ifdef(USE_COLORS).
 -define(info_msg(Fmt,Args), edbg_color_srv:info_msg(Fmt,Args)).
@@ -75,19 +77,29 @@
 -endif.
 
 
+
 -define(mytracer, mytracer).
 
 -define(inside(At,Cur,Page), ((Cur >=At) andalso (Cur =< (At+Page)))).
+-define(inside_vl(At,Cur,VL,Page), ((Cur >=At) andalso (VL =< Page))).
 
--record(tlist, {
-          level = maps:new(),  % Key=<pid> , Val=<level>
-          at = 1,
-          current = 1,
-          page = 20,
-          send_receive = true, % do (not) show send/receive msgs
-          memory = true,       % do (not) show memory info
-          bs = erl_eval:new_bindings()
-         }).
+-record(tlist,
+        {
+         level = maps:new(),  % Key=<pid> , Val=<level>
+         at = 1,
+         current = 1,
+         page = 20,
+         send_receive = true, % do (not) show send/receive msgs
+         memory = true,       % do (not) show memory info
+         bs = erl_eval:new_bindings(),
+
+         %% -- num of visible lines --
+         %% If display of send/receive msgs is turned off
+         %% then this counter keeps track of how many lines
+         %% we are currently displaying, making it possible
+         %% to fill the 'page'.
+         vlines = 0
+        }).
 
 
 -record(t, {
@@ -296,7 +308,10 @@ rloop(Pid, Prompt) ->
         ["w"++X] -> show_raw(?mytracer, X);
         ["p"++X] -> set_page(?mytracer, X);
         ["h"++_] -> print_help();
-        ["q"++_] -> Pid ! quit, exit(normal);
+        ["q"++_] ->
+            ?mytracer ! quit,
+            Pid ! quit,
+            exit(normal);
 
         _X ->
             ?info_msg("prompt got: ~p~n",[_X])
@@ -536,10 +551,10 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             dbg:stop_clear(),
             try
                 case lists:keyfind(N, 1, Buf) of
-                    {_,{trace, _Pid, call, MFA, _As}} ->
+                    {_, ?CALL(_Pid, MFA, _As)} ->
                         show_arg(ArgN, MFA);
 
-                    {_,{trace_ts, _Pid, call, MFA, _TS, _As}} ->
+                    {_, ?CALL_TS(_Pid, MFA, _TS, _As)} ->
                         show_arg(ArgN, MFA);
 
                     _ ->
@@ -554,10 +569,10 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             dbg:stop_clear(),
             try
                 case lists:keyfind(N, 1, Buf) of
-                    {_,{trace, _Pid, call, MFA, _As}} ->
+                    {_, ?CALL(_Pid, MFA, _As)} ->
                         show_rec(ArgN, MFA);
 
-                    {_,{trace_ts, _Pid, call, MFA, _TS, _As}} ->
+                    {_, ?CALL_TS(_Pid, MFA, _TS, _As)} ->
                         show_rec(ArgN, MFA);
 
                     _ ->
@@ -595,11 +610,11 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             NewTlist =
                 try
                     case lists:keyfind(N, 1, Buf) of
-                        {_,{trace, _Pid, call, MFA, _As}} ->
+                        {_, ?CALL(_Pid, MFA, _As)} ->
                             Val = get_arg(ArgN, MFA),
                             add_binding(Tlist, Var, Val);
 
-                        {_,{trace_ts, _Pid, call, MFA, _TS, _As}} ->
+                        {_, ?CALL_TS(_Pid, MFA, _TS, _As)} ->
                             Val = get_arg(ArgN, MFA),
                             add_binding(Tlist, Var, Val);
 
@@ -794,15 +809,15 @@ find_mf(At, Buf, Mstr, Fstr) ->
           end, Buf),
     %% Discard non-matching calls
     R = lists:dropwhile(
-          fun({_N,{trace,_Pid,call,{M,_,_}, _As}}) when M == Mod andalso
+          fun({_N, ?CALL(_Pid, {M,_,_}, _As)}) when M == Mod andalso
                                                         Fstr == "" ->
                   false;
-             ({_N,{trace_ts,_Pid,call,{M,_,_},_TS, _As}}) when M == Mod andalso
-                                                               Fstr == "" ->
+             ({_N, ?CALL_TS(_Pid, {M,_,_}, _TS, _As)}) when M == Mod andalso
+                                                            Fstr == "" ->
                   false;
-             ({_N,{trace,_Pid,call,{M,F,_}, _As}}) when M == Mod ->
+             ({_N, ?CALL(_Pid, {M,F,_}, _As)}) when M == Mod ->
                   not(lists:prefix(Fstr, atom_to_list(F)));
-             ({_N,{trace_ts,_Pid,call,{M,F,_},_TS, _As}}) when M == Mod ->
+             ({_N, ?CALL_TS(_Pid, {M,F,_}, _TS, _As)}) when M == Mod ->
                   not(lists:prefix(Fstr, atom_to_list(F)));
              (_) ->
                   true
@@ -821,11 +836,11 @@ find_mf_av(At, Buf, Mstr, Fstr, An, Av) ->
           end, Buf),
     %% Discard non-matching calls
     R = lists:dropwhile(
-          fun({_N,{trace,_Pid,call,{M,F,A}, _As}}) when M == Mod andalso
-                                                   length(A) >= An ->
+          fun({_N, ?CALL(_Pid, {M,F,A}, _As)}) when M == Mod andalso
+                                                    length(A) >= An ->
                   do_find_mf_av(Fstr, An, Av, F, A);
-             ({_N,{trace_ts,_Pid,call,{M,F,A},_TS, _As}}) when M == Mod andalso
-                                                          length(A) >= An ->
+             ({_N, ?CALL_TS(_Pid, {M,F,A}, _TS, _As)}) when M == Mod andalso
+                                                            length(A) >= An ->
                   do_find_mf_av(Fstr, An, Av, F, A);
              (_) ->
                   true
@@ -868,9 +883,9 @@ find_retval(At, Buf, Str) ->
     %% Discard non-matching return values
     try
         lists:foldl(
-          fun({N,{trace,_Pid,return_from, MFA, Value, _As}}=X,_Acc) ->
+          fun({N, ?RETURN_FROM(_Pid, MFA, Value, _As)}=X,_Acc) ->
                   do_find_retval(N, Str, Value, X, MFA, Buf);
-             ({N,{trace_ts,_Pid,return_from, MFA, Value, _TS, _As}}=X,_Acc) ->
+             ({N, ?RETURN_FROM_TS(_Pid, MFA, Value, _TS, _As)}=X,_Acc) ->
                   do_find_retval(N, Str, Value, X, MFA, Buf);
              (X, Acc) ->
                   [X|Acc]
@@ -899,19 +914,19 @@ do_find_retval(At, Str, Value, X, MFA, Buf) ->
 
 %% Will throw exception at success; crash if nothing is found!
 find_matching_call({M,F,A}, [{_N,Trace}=X|_], 0)
-  when element(3, Trace) == call andalso
+  when ?is_trace_call(Trace) andalso
        ?m(Trace) == M andalso
        ?f(Trace) == F andalso
        ?l(Trace) == A ->
     throw({matching_call,X});
 find_matching_call({M,F,A}=MFA, [{_N,Trace}|L], N)
-  when element(3, Trace) == call andalso
+  when ?is_trace_call(Trace) andalso
        ?m(Trace) == M andalso
        ?f(Trace) == F andalso
        ?l(Trace) == A ->
     find_matching_call(MFA, L, N-1);
 find_matching_call({M,F,A}=MFA, [{_N,Trace}|L], N)
-  when element(3, Trace) == return_from andalso
+  when ?is_trace_return_from(Trace) andalso
        ?m(Trace) == M andalso
        ?f(Trace) == F andalso
        ?a(Trace) == A ->
@@ -953,83 +968,120 @@ list_trace(Tlist, Buf) ->
         lists:foldr(
 
           %% C A L L
-          fun({N,{trace, Pid, call, {M,F,A}, As}},
+          fun({N, ?CALL(Pid, {M,F,A}, As)},
               #tlist{level = LevelMap,
                      memory = MemoryP,
                      at = At,
+                     vlines = VL,
                      page = Page} = Z)
-                when ?inside(At,N,Page) ->
+                when ?inside_vl(At,N,VL,Page) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   MPid = mpid(MemoryP, Pid, As),
                   ?info_msg("~"++Fs++".s:~s ~s ~p:~p/~p~n",
                            [integer_to_list(N),pad(Level),MPid,M,F,length(A)]),
-                  Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
+                  Z#tlist{vlines = VL + 1,
+                          level = maps:put(Pid, Level+1, LevelMap)};
 
-             ({N,{trace_ts, Pid, call, {M,F,A}, TS, As}},
+             ({N, ?CALL_TS(Pid, {M,F,A}, TS, As)},
               #tlist{level = LevelMap,
                      memory = MemoryP,
                      at = At,
+                     vlines = VL,
                      page = Page} = Z)
-                when ?inside(At,N,Page) ->
+                when ?inside_vl(At,N,VL,Page) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   MPid = mpid(MemoryP, Pid, As),
                   ?info_msg("~"++Fs++".s:~s ~s ~p:~p/~p - ~p~n",
                            [integer_to_list(N),pad(Level),MPid,M,F,length(A),
                             xts(TS)]),
-                  Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
+                  Z#tlist{vlines = VL + 1,
+                          level = maps:put(Pid, Level+1, LevelMap)};
 
-             ({_N,{trace, Pid, call, {_M,_F,_A}, _As}},
+             ({_N, ?CALL(Pid, {_M,_F,_A}, _As}),
               #tlist{level = LevelMap} = Z) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
 
-             ({_N,{trace_ts, Pid, call, {_M,_F,_A}, _TS, _As}},
+             ({_N, ?CALL_TS(Pid, {_M,_F,_A}, _TS, _As)},
               #tlist{level = LevelMap} = Z) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   Z#tlist{level = maps:put(Pid, Level+1, LevelMap)};
 
              %% R E T U R N _ F R O M
-             ({_N,{trace, Pid, return_from, _MFA, _Value, _As}},
+             ({_N, ?RETURN_FROM(Pid, _MFA, _Value, _As)},
               #tlist{level = LevelMap} = Z) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   Z#tlist{level = maps:put(Pid,erlang:max(Level-1,0),LevelMap)};
 
-             ({_N,{trace_ts, Pid, return_from, _MFA, _Value, _TS, _As}},
+             ({_N, ?RETURN_FROM_TS(Pid, _MFA, _Value, _TS, _As)},
               #tlist{level = LevelMap} = Z) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   Z#tlist{level = maps:put(Pid,erlang:max(Level-1,0),LevelMap)};
 
              %% S E N D
-             ({N,{trace, FromPid, send, Msg, ToPid, _As}},
+             ({N, ?SEND(FromPid, Msg, ToPid, _As)},
               #tlist{send_receive = true,
                      level = LevelMap,
                      at = At,
+                     vlines = VL,
                      page = Page} = Z)
-                when ?inside(At,N,Page) ->
+                when ?inside_vl(At,N,VL,Page) ->
                   Level = maps:get(FromPid, LevelMap, 0),
                   ?info_msg("~"++Fs++".s:~s >>> Send(~p) -> To(~p)  ~s~n",
                             [integer_to_list(N),pad(Level),
                              FromPid,ToPid,truncate(Msg)]),
+                  Z#tlist{vlines = VL + 1};
+             ({_N, ?SEND(_FromPid, _Msg, _ToPid, _As)}, Z) ->
                   Z;
-             ({_N,{trace, _FromPid, send, _Msg, _ToPid, _As}}, Z) ->
+
+             ({N, ?SEND_TS(FromPid, Msg, ToPid, TS, _As)},
+               #tlist{send_receive = true,
+                     level = LevelMap,
+                     at = At,
+                     vlines = VL,
+                     page = Page} = Z)
+                when ?inside_vl(At,N,VL,Page) ->
+                 Level = maps:get(FromPid, LevelMap, 0),
+                  ?info_msg("~"++Fs++".s:~s >>> Send(~p) -> To(~p)  ~s - ~p~n",
+                            [integer_to_list(N),pad(Level),
+                             FromPid,ToPid,truncate(Msg),xts(TS)]),
+                  Z#tlist{vlines = VL + 1};
+             ({_N, ?SEND_TS(_FromPid, _Msg, _ToPid, _TS, _As)}, Z) ->
                   Z;
 
              %% R E C E I V E
-             ({N,{trace, ToPid, 'receive', Msg, _As}},
+             ({N, ?RECEIVE(ToPid, Msg, _As)},
               #tlist{send_receive = true,
                      level = LevelMap,
                      at = At,
+                     vlines = VL,
                      page = Page} = Z)
-                when ?inside(At,N,Page) ->
+                when ?inside_vl(At,N,VL,Page) ->
                   Level = maps:get(ToPid, LevelMap, 0),
                   ?info_msg("~"++Fs++".s:~s <<< Receive(~p)  ~s~n",
                             [integer_to_list(N),pad(Level),
                              ToPid,truncate(Msg)]),
+                  Z#tlist{vlines = VL + 1};
+             ({_N, ?RECEIVE(_ToPid, _Msg, _As)}, Z) ->
                   Z;
-             ({_N,{trace, _ToPid, 'receive', _Msg, _As}}, Z) ->
+
+             ({N, ?RECEIVE_TS(ToPid, Msg, TS, _As)},
+              #tlist{send_receive = true,
+                     level = LevelMap,
+                     at = At,
+                     vlines = VL,
+                     page = Page} = Z)
+                when ?inside_vl(At,N,VL,Page) ->
+                  Level = maps:get(ToPid, LevelMap, 0),
+                  ?info_msg("~"++Fs++".s:~s <<< Receive(~p)  ~s - ~p~n",
+                            [integer_to_list(N),pad(Level),
+                             ToPid,truncate(Msg),xts(TS)]),
+                  Z#tlist{vlines = VL + 1};
+             ({_N, ?RECEIVE_TS(_ToPid, _Msg, _TS, _As)}, Z) ->
                   Z
 
-          end, Tlist#tlist{level = maps:new()}, Buf),
+          end, Tlist#tlist{vlines = 0,
+                           level = maps:new()}, Buf),
 
     NewAt = Tlist#tlist.at + Tlist#tlist.page + 1,
     Zlist#tlist{at = NewAt}.
@@ -1060,14 +1112,21 @@ xts(TS) ->
             TS - XTS
     end.
 
+
 maybe_put_first_timestamp(Buf) ->
     case get(first_monotonic_timestamp) of
         undefined ->
             case Buf of
-                [{_N,{trace_ts, _Pid, call, _MFA, _TS, _As}}|_] ->
+                [{_N, ?CALL_TS(_Pid, _MFA, _TS, _S)}|_] ->
                     put(first_monotonic_timestamp,
                         get_first_monotonic_timestamp(Buf));
-                [{_N,{trace_ts, _Pid, return_from, _MFA, _Value, _TS,_As}}|_] ->
+                [{_N, ?RETURN_FROM_TS(_Pid, _MFA, _Value, _TS, _As)}|_] ->
+                    put(first_monotonic_timestamp,
+                        get_first_monotonic_timestamp(Buf));
+                [{_N, ?SEND_TS(_FromPid, _Msg, _ToPid, _TS, _As)}|_] ->
+                    put(first_monotonic_timestamp,
+                        get_first_monotonic_timestamp(Buf));
+                [{_N, ?RECEIVE_TS(_FromPid, _Msg, _TS, _As)}|_] ->
                     put(first_monotonic_timestamp,
                         get_first_monotonic_timestamp(Buf));
                 _ ->
@@ -1079,18 +1138,22 @@ maybe_put_first_timestamp(Buf) ->
 
 get_first_monotonic_timestamp(Buf) ->
     case lists:reverse(Buf) of
-        [{_N,{trace_ts, _Pid, call, _MFA, TS, _As}}|_] ->
+        [{_N, ?CALL_TS(_Pid, _MFA, TS, _S)}|_] ->
             TS;
-        [{_N,{trace_ts, _Pid, return_from, _MFA, _Value, TS, _As}}|_] ->
+        [{_N, ?RETURN_FROM_TS(_Pid, _MFA, _Value, TS, _As)}|_] ->
+            TS;
+        [{_N, ?SEND_TS(_FromPid, _Msg, _ToPid, TS, _As)}|_] ->
+            TS;
+        [{_N, ?RECEIVE_TS(_FromPid, _Msg, TS, _As)}|_] ->
             TS
     end.
 
 
 get_return_value(N, [{I,_}|T]) when I < N ->
     get_return_value(N, T);
-get_return_value(N, [{N,{trace, _Pid, call, {M,F,A}, _As}}|T]) ->
+get_return_value(N, [{N, ?CALL(_Pid, {M,F,A}, _As)}|T]) ->
     find_return_value({M,F,length(A)}, T);
-get_return_value(N, [{N,{trace_ts, _Pid, call, {M,F,A}, _TS, _As}}|T]) ->
+get_return_value(N, [{N, ?CALL_TS(_Pid, {M,F,A}, _TS, _As)}|T]) ->
     find_return_value({M,F,length(A)}, T);
 get_return_value(N, [{I,_}|_]) when I > N ->
     not_found;
@@ -1100,18 +1163,20 @@ get_return_value(_, []) ->
 find_return_value(MFA, T) ->
     find_return_value(MFA, T, 0).
 
-find_return_value(MFA,[{_,{trace,_Pid,return_from,MFA,Val,_As}}|_],0 = _Depth)->
+find_return_value(MFA,[{_, ?RETURN_FROM(_Pid, MFA, Val, _As)}|_],0 = _Depth)->
     {ok, MFA, Val};
-find_return_value(MFA, [{_,{trace_ts,_Pid,return_from,MFA,Val,_TS,_As}}|_],
+find_return_value(MFA, [{_, ?RETURN_FROM_TS(_Pid, MFA, Val, _TS, _As)}|_],
                   0 = _Depth) ->
     {ok, MFA, Val};
-find_return_value(MFA, [{_,{trace,_Pid,return_from,MFA,_,_As}}|T], Depth)
+find_return_value(MFA, [{_, ?RETURN_FROM(_Pid, MFA, _Val, _As)}|T], Depth)
   when Depth > 0 ->
     find_return_value(MFA, T, Depth-1);
-find_return_value(MFA, [{_,{trace_ts,_Pid,return_from,MFA,_,_TS,_As}}|T], Depth)
+find_return_value(MFA,[{_, ?RETURN_FROM_TS(_Pid, MFA, _MFA, _TS, _As)}|T],Depth)
   when Depth > 0 ->
     find_return_value(MFA, T, Depth-1);
-find_return_value(MFA, [{_,{trace, _Pid, call, MFA,_As}}|T], Depth) ->
+find_return_value(MFA, [{_, ?CALL(_Pid, MFA, _As)}|T], Depth) ->
+    find_return_value(MFA, T, Depth+1);
+find_return_value(MFA, [{_, ?CALL_TS(_Pid, MFA, _TS, _As)}|T], Depth) ->
     find_return_value(MFA, T, Depth+1);
 find_return_value(MFA, [_|T], Depth) ->
     find_return_value(MFA, T, Depth);
@@ -1122,16 +1187,22 @@ find_return_value(_MFA, [], _Depth) ->
 mlist(N, Buf) ->
     try
         case lists:keyfind(N, 1, Buf) of
-            {_,{trace, _Pid, call, MFA, _As}} ->
+            {_, ?CALL(_Pid, MFA, _As)} ->
                 do_mlist(MFA);
 
-            {_,{trace_ts, _Pid, call, MFA, _TS, _As}} ->
+            {_, ?CALL_TS(_Pid, MFA, _TS, _As)} ->
                 do_mlist(MFA);
 
-            {_,{trace, SendPid, send, Msg, ToPid, _As}} ->
+            {_, ?SEND(SendPid, Msg, ToPid, _As)} ->
                 show_send_msg(SendPid, ToPid, Msg);
 
-            {_,{trace, RecvPid, 'receive', Msg, _As}} ->
+            {_, ?SEND_TS(SendPid, Msg, ToPid, _TS, _As)} ->
+                show_send_msg(SendPid, ToPid, Msg);
+
+            {_, ?RECEIVE(RecvPid, Msg, _As)} ->
+                show_recv_msg(RecvPid, Msg);
+
+            {_, ?RECEIVE_TS(RecvPid, Msg, _TS, _As)} ->
                 show_recv_msg(RecvPid, Msg);
 
             _ ->

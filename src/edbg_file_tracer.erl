@@ -56,6 +56,10 @@
 %% debug export
 -export([log/2]).
 
+
+-include("edbg_trace.hrl").
+
+
 -define(SERVER, ?MODULE).
 
 %%-define(log(Fmt,Args), log("~p: "++Fmt,[?MODULE|Args])).
@@ -65,6 +69,7 @@
 
 -define(DEFAULT_MAX_MSGS, 1000).
 -define(DEFAULT_TRACE_TIME, 10). % seconds
+
 
 -record(m, {
           mname = '_',
@@ -367,18 +372,25 @@ send_receive(_State)                      -> [].
 dump_tmsgs(#state{dump_output = false}, _Tmsgs) ->
     ok;
 dump_tmsgs(#state{log_file = Fname}, Tmsgs) ->
+    %% We just overwrite any existing file in order to ensure
+    %% we have the latest on disk in case we should crash.
+    %% FIXME: Appending data would save memory that now is
+    %%        held in this process by all the trace messages.
     ok = file:write_file(Fname,term_to_binary(Tmsgs)).
 
 
-tmsgs(#state{max_msgs = Max} = State,
+tmsgs(#state{max_msgs = Max, send_receive = SendReceive} = State,
       [Trace|Traces],
       N,            % Max allowed number of collected trace messages!
       Tmsgs)
   when N < Max andalso
-       (element(3, Trace) == call orelse
-        element(3, Trace) == return_from orelse
-        element(3, Trace) == send orelse
-        element(3, Trace) == 'receive') ->
+       (?is_trace_call(Trace) orelse
+        ?is_trace_return_from(Trace) orelse
+        (SendReceive == true
+         andalso
+           (?is_trace_send(Trace) orelse
+            ?is_trace_receive(Trace)))
+       ) ->
     tmsgs(State, Traces, N+1, [{N,Trace}|Tmsgs]);
 %%
 %% Anything else should not be collected!
@@ -410,9 +422,9 @@ recv_all_traces(State, SrvPid, KnownPids) ->
 recv_all_traces(State, SrvPid, KnownPids, Suspended0, Traces, Timeout) ->
     receive
         Trace when is_tuple(Trace) andalso
-                   (element(1, Trace) == trace orelse
-                    element(1, Trace) == trace_ts) andalso
-                   element(2, Trace) =/= SrvPid ->
+                   ((?is_trace_msg(Trace) orelse
+                     ?is_trace_ts_msg(Trace)) andalso
+                    (?trace_pid(Trace) =/= SrvPid)) ->
             Suspended = suspend(Trace, Suspended0),
             case save_trace_p(Trace, KnownPids) of
                 true ->
@@ -446,21 +458,21 @@ recv_all_traces(State, SrvPid, KnownPids, Suspended0, Traces, Timeout) ->
 %% to:
 %%    {trace, Pid, call, MFA, [{memory,Memory}]}
 x(#state{memory = true}, Trace) when is_pid(element(2,Trace)) ->
-    Memory = pinfo(element(2,Trace), memory),
+    Memory = pinfo(?trace_pid(Trace), memory),
     list_to_tuple(tuple_to_list(Trace)++[[{memory,Memory}]]);
 x(_, Trace) ->
     list_to_tuple(tuple_to_list(Trace)++[[]]).
 
 
 maybe_add_to_known_pids(Trace, KnownPids) when element(3, Trace) == call ->
-    ordsets:add_element(element(2, Trace), KnownPids);
+    ordsets:add_element(?trace_pid(Trace), KnownPids);
 maybe_add_to_known_pids(_, KnownPids) ->
     KnownPids.
 
 save_trace_p(Trace, KnownPids)
-  when element(3, Trace) == send orelse
-       element(3, Trace) == 'receive' ->
-    ordsets:is_element(element(2, Trace), KnownPids);
+  when ?is_trace_send(Trace) orelse
+       ?is_trace_receive(Trace) ->
+    ordsets:is_element(?trace_pid(Trace), KnownPids);
 save_trace_p(_, _) ->
     true.
 

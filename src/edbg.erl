@@ -121,6 +121,12 @@ file() ->
 file(Fname) ->
     edbg_tracer:file(Fname).
 
+%% @doc Start tracing making use of a previously stored configuration.
+%%
+%% A previous call to 'fstart/2' will store the configuration
+%% on disk so that it can be resued when calling this function.
+%%
+%% @end
 fstart() ->
     edbg_tracer:fstart().
 
