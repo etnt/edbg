@@ -432,7 +432,21 @@ xset(Pid, X) ->
 
             [Var,A,B] ->
                 %% Bind Var to Argument-Value
-                Pid ! {xset, Var, list_to_integer(A), list_to_integer(B)}
+                Pid ! {xset, Var, list_to_integer(A), list_to_integer(B)};
+
+            [Var,A,B,R] ->
+                %% Bind Var to a record field in the Argument-Value
+                %% Example: string:tokens("#arg.client_ip_port","#.").
+                case string:tokens(string:strip(R), "#.") of
+                    [Record,Field] ->
+                        Pid ! {xset, Var,
+                               list_to_integer(A),list_to_integer(B),
+                               Record, Field};
+                    _ ->
+                        ?info_msg("~ncould not parse record field: ~p~n",[R]),
+                        Pid ! {xset, Var,
+                               list_to_integer(A), list_to_integer(B)}
+                end
         end
     catch
         _:_ -> false
@@ -617,6 +631,35 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
                         {_, ?CALL_TS(_Pid, MFA, _TS, _As)} ->
                             Val = get_arg(ArgN, MFA),
                             add_binding(Tlist, Var, Val);
+
+                        _ ->
+                            ?err_msg("not found~n",[]),
+                            Tlist
+                    end
+                catch
+                    _:_ ->
+                        ?err_msg("unexpected error~n",[]),
+                        Tlist
+                end,
+            ?MODULE:tloop(X, NewTlist ,Buf);
+
+        %% Set Variable to the specified record field of Argument-Value
+        {xset, Var, N, ArgN, RecordStr, FieldStr} ->
+            dbg:stop_clear(),
+            Record = list_to_atom(RecordStr),
+            Field = list_to_atom(FieldStr),
+            NewTlist =
+                try
+                    case lists:keyfind(N, 1, Buf) of
+                        {_, ?CALL(_Pid, MFA, _As)} ->
+                            Val = get_arg(ArgN, MFA),
+                            FieldIndex = record_field_index(MFA, Record, Field),
+                            add_binding(Tlist, Var, element(FieldIndex,Val));
+
+                        {_, ?CALL_TS(_Pid, MFA, _TS, _As)} ->
+                            Val = get_arg(ArgN, MFA),
+                            FieldIndex = record_field_index(MFA, Record, Field),
+                            add_binding(Tlist, Var, element(FieldIndex,Val));
 
                         _ ->
                             ?err_msg("not found~n",[]),
@@ -1268,3 +1311,44 @@ send(Pid, Msg) ->
 
 reply(Pid, Msg) ->
     Pid ! {self(), Msg}.
+
+
+
+record_field_index({M,_,_}, Record, Field) ->
+    %% we cache the Record Field info for a Module
+    case get({M,Record}) of
+        undefined ->
+            %% [{Field,Index}]
+            Fields = get_record_fields(M, Record),
+            put({M,Record}, Fields),
+            {Field,Index} = lists:keyfind(Field, 1, Fields),
+            Index;
+        Fields ->
+            {Field,Index} = lists:keyfind(Field, 1, Fields),
+            Index
+    end.
+
+
+
+get_record_fields(Mod, Record) ->
+    %% Get the Record definitions for the Module
+    Fname = edbg:find_source(Mod),
+    {ok, Defs} = pp_record:read(Fname),
+
+    %% Get the Record Fields
+    {Record,{attribute,_,record,{Record,Fs}}} = lists:keyfind(Record, 1, Defs),
+
+    %% Extract the Record Field names; keep the order
+    F = fun({typed_record_field,{record_field,_,{atom,_,Name},_},_},Acc) ->
+                [Name|Acc];
+           ({typed_record_field,{record_field,_,{atom,_,Name}},_},Acc) ->
+                [Name|Acc];
+           ({record_field,_,{atom,_,Name}},Acc) ->
+                [Name|Acc];
+           ({record_field,_,{atom,_,Name},_},Acc) ->
+                [Name|Acc]
+        end,
+    Fields = lists:foldr(F, [], Fs),
+
+    %% Create a Key-Value list of the fields and their index into the Record
+    lists:zip(Fields, lists:seq(2, erlang:length(Fields)+1)).
