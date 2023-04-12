@@ -1,6 +1,31 @@
 -ifndef(_EDBG_TRACE_HRL_).
 -define(_EDBG_TRACE_HRL_, true).
 
+-ifdef(USE_COLORS).
+-define(info_msg(Fmt,Args), edbg_color_srv:info_msg(Fmt,Args)).
+-define(att_msg(Fmt,Args), edbg_color_srv:att_msg(Fmt,Args)).
+-define(warn_msg(Fmt,Args), edbg_color_srv:warn_msg(Fmt,Args)).
+-define(err_msg(Fmt,Args), edbg_color_srv:err_msg(Fmt,Args)).
+-define(cur_line_msg(Fmt,Args), edbg_color_srv:cur_line_msg(Fmt,Args)).
+-define(c_hi(Str), edbg_color_srv:c_hi(Str)).
+-define(c_warn(Str), edbg_color_srv:c_warn(Str)).
+-define(c_err(Str), edbg_color_srv:c_err(Str)).
+-define(help_hi(Str), edbg_color_srv:help_hi(Str)).
+-define(edbg_color_srv_init(), edbg_color_srv:init()).
+-else.
+-define(info_msg(Fmt,Args), io:format(Fmt,Args)).
+-define(att_msg(Fmt,Args), io:format(Fmt,Args)).
+-define(warn_msg(Fmt,Args), io:format(Fmt,Args)).
+-define(err_msg(Fmt,Args), io:format(Fmt,Args)).
+-define(cur_line_msg(Fmt,Args), io:format(Fmt,Args)).
+-define(c_hi(Str), Str).
+-define(c_warn(Str), Str).
+-define(c_err(Str), Str).
+-define(help_hi(Str), Str).
+-define(edbg_color_srv_init(), ok).
+-endif.
+
+
 %% Access to trace message items
 -define(is_trace_msg(Trace), (element(1,Trace) == trace)).
 -define(is_trace_ts_msg(Trace), (element(1,Trace) == trace_ts)).

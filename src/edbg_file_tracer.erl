@@ -62,6 +62,8 @@
 
 -define(SERVER, ?MODULE).
 
+-define(DOT_EDBG, ".edbg").
+
 %%-define(log(Fmt,Args), log("~p: "++Fmt,[?MODULE|Args])).
 -define(log(Fmt,Args), ok).
 
@@ -199,7 +201,45 @@ call(Msg) ->
 %%--------------------------------------------------------------------
 init([]) ->
     process_flag(trap_exit, true),
-    {ok, #state{}}.
+    {ok, setup_init_state()}.
+
+-define(is_bool(B), ((B == true) orelse (B == false))).
+
+setup_init_state() ->
+    try
+        Home = os:getenv("HOME"),
+        Fname = filename:join([Home, ?DOT_EDBG]),
+        L = consult_file(Fname),
+        F = fun({log_file, LogFile}, S) when is_list(LogFile)  ->
+                    S#state{log_file = LogFile};
+               ({max_msgs, MaxMsgs}, S) when is_integer(MaxMsgs) ->
+                    S#state{max_msgs = MaxMsgs};
+               ({trace_time, TraceTime}, S) when is_integer(TraceTime) ->
+                    S#state{trace_time = TraceTime};
+               ({monotonic_ts, MonoTS}, S) when ?is_bool(MonoTS) ->
+                    S#state{monotonic_ts = MonoTS};
+               ({send_receive, SendRec}, S) when ?is_bool(SendRec) ->
+                    S#state{send_receive = SendRec};
+               ({memory, Memory}, S) when ?is_bool(Memory) ->
+                    S#state{memory = Memory};
+               (Opt, S) ->
+                    ?err_msg("~nIgnoring unknown default option: ~p~n",[Opt]),
+                    S
+            end,
+        lists:foldl(F, #state{}, L)
+    catch
+        undefined ->
+            #state{};
+        _:Err ->
+            ?err_msg("~nError reading: ~p, ignoring it: ~p~n",[?DOT_EDBG,Err]),
+            #state{}
+    end.
+
+consult_file(Fname) ->
+    case file:consult(Fname) of
+        {ok,L} -> L;
+        _      -> throw(undefined)
+    end.
 
 %%--------------------------------------------------------------------
 %% handle_call(ping, _From, State) ->

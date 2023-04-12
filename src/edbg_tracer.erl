@@ -52,30 +52,6 @@
 -include("edbg_trace.hrl").
 
 
--ifdef(USE_COLORS).
--define(info_msg(Fmt,Args), edbg_color_srv:info_msg(Fmt,Args)).
--define(att_msg(Fmt,Args), edbg_color_srv:att_msg(Fmt,Args)).
--define(warn_msg(Fmt,Args), edbg_color_srv:warn_msg(Fmt,Args)).
--define(err_msg(Fmt,Args), edbg_color_srv:err_msg(Fmt,Args)).
--define(cur_line_msg(Fmt,Args), edbg_color_srv:cur_line_msg(Fmt,Args)).
--define(c_hi(Str), edbg_color_srv:c_hi(Str)).
--define(c_warn(Str), edbg_color_srv:c_warn(Str)).
--define(c_err(Str), edbg_color_srv:c_err(Str)).
--define(help_hi(Str), edbg_color_srv:help_hi(Str)).
--define(edbg_color_srv_init(), edbg_color_srv:init()).
--else.
--define(info_msg(Fmt,Args), io:format(Fmt,Args)).
--define(att_msg(Fmt,Args), io:format(Fmt,Args)).
--define(warn_msg(Fmt,Args), io:format(Fmt,Args)).
--define(err_msg(Fmt,Args), io:format(Fmt,Args)).
--define(cur_line_msg(Fmt,Args), io:format(Fmt,Args)).
--define(c_hi(Str), Str).
--define(c_warn(Str), Str).
--define(c_err(Str), Str).
--define(help_hi(Str), Str).
--define(edbg_color_srv_init(), ok).
--endif.
-
 
 
 -define(mytracer, mytracer).
@@ -1253,8 +1229,7 @@ mlist(N, Buf) ->
         end
     catch
         _:Err ->
-            ?info_msg(?c_err("CRASH: ~p") ++ " ~p~n",
-                     [Err,erlang:get_stacktrace()])
+            ?info_msg(?c_err("CRASH: ~p~n"), [Err])
     end.
 
 show_send_msg(SendPid, ToPid, Msg) ->
