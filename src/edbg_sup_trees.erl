@@ -101,7 +101,7 @@ prompt(Pid) when is_pid(Pid) ->
 loop(Pid, Prompt, State0) ->
     io:format("~n",[]),
     State =
-        case string:tokens(io:get_line(Prompt), "\n") of
+        case string:tokens(b2l(io:get_line(Prompt)), "\n") of
             ["h"++X]  -> help(X, State0);
             ["x"++X]  -> help(expand(X, State0));
             ["s"++X]  -> shrink_or_show(X, State0);
@@ -120,6 +120,13 @@ loop(Pid, Prompt, State0) ->
                 State0
         end,
     ?MODULE:loop(Pid, Prompt, State).
+
+
+b2l(B) when is_binary(B) ->
+     erlang:binary_to_list(B);
+b2l(L) when is_list(L) ->
+    L.
+
 
 refresh() ->
     #state{sup_trees = enumerate(all_sup_trees())}.

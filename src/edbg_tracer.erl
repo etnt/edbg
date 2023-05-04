@@ -196,7 +196,6 @@ fstart(ModFunList, Options)
                                io:format("Ignoring Option: ~p~n",[X]),
                                Acc
                        end, [], Options),
-
     set_config(MFs++Opts, get_config()),
     start_trace().
 
@@ -264,7 +263,7 @@ prompt(Pid) when is_pid(Pid) ->
     rloop(Pid, Prompt).
 
 rloop(Pid, Prompt) ->
-    case string:tokens(io:get_line(Prompt), "\n") of
+    case string:tokens(b2l(io:get_line(Prompt)), "\n") of
         ["eval"++X] -> xeval(?mytracer, X);
         ["xnall"++X] -> xnall(?mytracer, X);
         ["xall"++X] -> xall(?mytracer, X);
@@ -293,6 +292,12 @@ rloop(Pid, Prompt) ->
             ?info_msg("prompt got: ~p~n",[_X])
     end,
     ?MODULE:rloop(Pid, Prompt).
+
+b2l(B) when is_binary(B) ->
+     erlang:binary_to_list(B);
+b2l(L) when is_list(L) ->
+    L.
+
 
 find(Pid, X) ->
     try
@@ -448,7 +453,7 @@ show_raw(Pid, X) ->
 
 parse_integers(Pid, X, Msg) ->
     try
-        case string:tokens(string:strip(X), " ") of
+        case string:tokens(string:strip(b2l(X)), b2l(" ")) of
             [] ->
                 Pid ! Msg;
             [A] ->
@@ -1244,10 +1249,12 @@ show_recv_msg(RecvPid, Msg) ->
 do_mlist({M,F,A}) ->
     Fname = edbg:find_source(M),
     {ok, SrcBin, Fname} = erl_prim_loader:get_file(Fname),
+    file:write_file("/tmp/"++filename:basename(Fname), SrcBin),
     LF = atom_to_list(F),
     Src = binary_to_list(SrcBin),
     %% '.*?' ::= ungreedy match!
-    RegExp = "\\n"++LF++"\\(.*?->",
+    RegExp = b2l("\\n"++LF++"\\(.*?->"),
+    ExRegExp = b2l("def[p]?[ ]+"++LF++"[ (].*do"), % Elixir!
     %% 'dotall' ::= allow multiline function headers
     case re:run(Src, RegExp, [global,dotall,report_errors]) of
         {match, MatchList} ->
@@ -1256,7 +1263,16 @@ do_mlist({M,F,A}) ->
             ?info_msg("~nCall: ~p:~p/~p~n~s~n"++FmtStr++"~n~s~n",
                       [M,F,length(A),Sep|Args]++[Sep]);
         Else ->
-            ?info_msg("nomatch: ~p~n",[Else])
+            %% Could it be Elixir?
+            case re:run(Src, ExRegExp, [global,report_errors]) of
+                {match, ExMatchList} ->
+                    {FmtStr, Args} = mk_print_match(SrcBin, ExMatchList),
+                    Sep = pad(35, $-),
+                    ?info_msg("~nCall: ~p:~p/~p~n~s~n"++FmtStr++"~n~s~n",
+                              [M,F,length(A),Sep|Args]++[Sep]);
+                _ ->
+                    ?info_msg("nomatch: ~p~n",[Else])
+            end
     end.
 
 

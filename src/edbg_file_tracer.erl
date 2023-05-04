@@ -181,15 +181,12 @@ add_mf_f(M)
 
 new_mf() -> #m{}.
 
-mname(M, Mname)
-  when is_record(M, m) andalso
-       is_atom(Mname) ->
-    M#m{mname = Mname}.
+mname(M, Mname) when is_record(M, m) ->
+    M#m{mname = l2a(Mname)}.
 
 fname(M, Fname)
-  when is_record(M, m) andalso
-       is_atom(Fname) ->
-    M#m{fname = Fname}.
+  when is_record(M, m) ->
+    M#m{fname = l2a(Fname)}.
 
 call(Msg) ->
      gen_server:call(?SERVER, Msg, infinity).
@@ -363,6 +360,14 @@ run_tracer(#state{modules = Modules, trace_spec = TraceSpec} = State) ->
                      monotonic_ts(State) ++
                      send_receive(State)),
     tloop(State, 0, []).
+
+l2a(L) when is_list(L) ->
+    erlang:list_to_atom(L);
+l2a(A) when is_atom(A) ->
+    A.
+
+
+
 
 tloop(#state{srv_pid    = SrvPid,
              trace_spec = TraceSpec,
