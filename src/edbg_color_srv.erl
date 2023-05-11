@@ -53,45 +53,59 @@
 %% PUBLIC API
 %%
 
+%% @private
 info_msg(Fmt, Args) ->
     io:format(info_str(Fmt, Args)).
 
+%% @private
 att_msg(Fmt, Args) ->
     io:format(att_str(Fmt, Args)).
 
+%% @private
 warn_msg(Fmt, Args) ->
     io:format(warn_str(Fmt, Args)).
 
+%% @private
 err_msg(Fmt, Args) ->
     io:format(err_str(Fmt, Args)).
 
+%% @private
 cur_line_msg(Fmt, Args) ->
     io:format(cur_line_str(Fmt, Args)).
 
+%% @private
 info_str(Fmt, Args) ->
     call({info_str, Fmt, Args}).
 
+%% @private
 att_str(Fmt, Args) ->
     call({att_str, Fmt, Args}).
 
+%% @private
 warn_str(Fmt, Args) ->
     call({warn_str, Fmt, Args}).
 
+%% @private
 err_str(Fmt, Args) ->
     call({err_str, Fmt, Args}).
 
+%% @private
 cur_line_str(Fmt, Args) ->
     call({cur_line_str, Fmt, Args}).
 
+%% @private
 c_hi(Str) ->
     call({c_hi, Str}).
 
+%% @private
 c_warn(Str) ->
     call({c_warn, Str}).
 
+%% @private
 c_err(Str) ->
     call({c_err, Str}).
 
+%% @private
 help_hi(Str) ->
     %% highligt character(s) inside parentheses
     F = fun($), {normal, _Collect, Acc}) ->
@@ -107,6 +121,7 @@ help_hi(Str) ->
     {_, _, Res} = lists:foldr(F, {normal, [], []}, lists:flatten(Str)),
     Res.
 
+%% @private
 init() ->
     case whereis(?SERVER) of
         undefined ->

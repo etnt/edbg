@@ -1,3 +1,194 @@
+%%%-------------------------------------------------------------------
+%%% @author Torbjorn Tornkvist <kruskakli@gmail.com>
+%%% @copyright (C) 2017, Torbjorn Tornkvist
+%%% @doc The `edbg' tracer.
+%%%
+%%% The function {@link edbg:fstart/2} takes one argument containing
+%%% the list of modules we want to trace, and a second argument
+%%% containing various options. The trace output will be stored on file.
+%%%
+%%% So in the example below we want to trace on three modules:
+%%% yaws_server, yaws, yaws_config,  from the Yaws webserver.
+%%%  With the `max_msgs' option we restrict the allowed number
+%%%  of trace messages to 10000.
+%%%
+%%% ```
+%%%  1> edbg:fstart([yaws_server,yaws,yaws_config],[{max_msgs,10000}]).
+%%%  ok
+%%% '''
+%%%
+%%% Now run some traffic toward yaws and when done, stop the tracing:
+%%%
+%%% ```
+%%%   2> edbg:fstop().
+%%%   ok
+%%% '''
+%%%
+%%% Here we rely on using the default filename for storing the trace output,
+%%% hence we don't have to specify it here when loading the trace info to
+%%%  be displayed.
+%%%
+%%% ```
+%%%  3> edbg:file().
+%%%
+%%%  (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
+%%%  (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
+%%%  (pr)etty print record <N> <ArgN>
+%%%  (f)ind <RegExp> [<ArgN> <ArgRegExp>] | ~r<RegExp>
+%%%  (on)/(off) send_receive | memory
+%%%  (p)agesize <N> (q)uit
+%%%  (set) <Var> <N> [<ArgN>]  (let) <Var> <Expr>
+%%%  (eval) <Expr>  (xall/xnall) <Mod>
+%%% '''
+%%%
+%%% As can be seen, we first get a compact help text showing what commands
+%%% we can use. Then follows the beginning of the trace output.
+%%% Each line is prefixed with a number that we use for reference.
+%%% The indentation shows the depth of the call chain.
+%%%
+%%% ```
+%%%   0: <0.255.0> yaws_server:gserv_loop/4
+%%%   1:  <0.258.0> yaws_server:gserv_loop/4
+%%%   2:   <0.233.0> yaws:month/1
+%%%   4:   <0.259.0> yaws_server:peername/2
+%%%   6:   <0.258.0> yaws_server:close_accepted_if_max/2
+%%%   8:   <0.258.0> yaws_server:acceptor/1
+%%%  10:   <0.258.0> yaws_server:gserv_loop/4
+%%%  11:    <0.281.0> yaws_server:acceptor0/2
+%%%  12:     <0.281.0> yaws_server:do_accept/1
+%%%    ...snip...
+%%% '''
+%%%
+%%% As you can see, we get a pretty output where we can follow
+%%% the chain of execution without drowning in output which would
+%%% be the case if we should have displayed the contents of all
+%%% the arguments to the functions.
+%%%
+%%% Instead, we can now inspect a particular call of interest,
+%%% let's say line 4; we use the `(s)how' command to display
+%%% the function clause heads in order to help us decide which
+%%% argument to inspect.
+%%%
+%%% ```
+%%%   tlist> s 4
+%%%
+%%%    Call: yaws_server:peername/2
+%%%    -----------------------------------
+%%%
+%%%    peername(CliSock, ssl) ->
+%%%
+%%%    peername(CliSock, nossl) ->
+%%%
+%%%    -----------------------------------
+%%% '''
+%%%  
+%%% To show what the second argument contained,
+%%% we add 2 to the show command:
+%%%
+%%% ```
+%%%  tlist> s 4 2
+%%%
+%%%  Call: yaws_server:peername/2 , argument 2:
+%%%  -----------------------------------
+%%%  nossl
+%%% '''
+%%%
+%%%  We can also see what the function returned:
+%%%
+%%% ```
+%%%  tlist> r 4
+%%%
+%%%  Call: yaws_server:peername/2 , return value:
+%%%  -----------------------------------
+%%%  {{127,0,0,1},35871}
+%%% '''
+%%%
+%%% To display (again) the function call chain,
+%%% you use the `a(t)' command. With no arguments it will just
+%%% re-display the trace output. If you want to go to a particular
+%%% line you just give that as an argument.
+%%% Example, go to line 10 in the example above:
+%%%
+%%% ```
+%%%   tlist> a 10
+%%%   10:   <0.258.0> yaws_server:gserv_loop/4
+%%%   11:    <0.281.0> yaws_server:acceptor0/2
+%%%   12:     <0.281.0> yaws_server:do_accept/1
+%%%   13:      <0.259.0> yaws_server:aloop/4
+%%%    ...snip...
+%%% '''
+%%%
+%%% To change the number of lines shown of the trace output.
+%%% Set it with the `p(age)' command.
+%%% Example, display (roughly) 50 lines:
+%%%
+%%% ```
+%%%  tlist> p 50
+%%% '''
+%%%
+%%% The amount of trace output can be huge so we can search
+%%% for a particular function call that we are interested in.
+%%% Note that you can specify a RegExp for searching among
+%%% the Mod:Fun calls.
+%%%
+%%% ```
+%%%   tlist> f yaws:decode_b
+%%%   32:           <0.537.0> yaws:decode_base64/1
+%%%   33:            <0.537.0> yaws:decode_base64/2
+%%%   34:             <0.537.0> yaws:d/1
+%%%    ...snip...
+%%% '''
+%%%
+%%% We can also search in a particular argument of a particular
+%%% function call. Here the second argument of yaws:setopts should
+%%% contain the string: 'packet_size':
+%%%
+%%% ```
+%%%   tlist> f yaws:setopts 2 packet_size
+%%%   22:         <0.537.0> yaws:setopts/3
+%%%   24:         <0.537.0> yaws:do_recv/3
+%%%   26:         <0.537.0> yaws:http_collect_headers/5
+%%%    ...snip...
+%%% '''
+%%%
+%%% We can now verify that it found it:
+%%%
+%%% ```
+%%%   tlist> s 22 2
+%%%
+%%%   Call: yaws:setopts/3 , argument 2:
+%%%   -----------------------------------
+%%%   [{packet,httph},{packet_size,16384}]
+%%% '''
+%%%
+%%% To search among the return values we prefix our search
+%%% string with a `~r' sigil:
+%%%
+%%% ```
+%%%   tlist> f ~rGET
+%%%   184:           <0.537.0> yaws:make_allow_header/1
+%%%   187:          <0.537.0> yaws_server:deliver_accumulated/1
+%%%   188:           <0.537.0> yaws:outh_get_content_encoding/0
+%%%   190:           <0.537.0> yaws:outh_set_content_encoding/1
+%%%    ...snip...
+%%% '''
+%%%
+%%% We can now verify that it found it:
+%%%
+%%% ```
+%%%   tlist> r 184
+%%%
+%%%   Call: yaws:make_allow_header/1 , return value:
+%%%   -----------------------------------
+%%%   ["Allow: GET, POST, OPTIONS, HEAD\r\n"]
+%%% '''
+%%%
+%%% To see more examples visit the `edbg' wiki at:
+%%% [https://github.com/etnt/edbg/wiki/Tracing]
+%%%
+%%% @end
+%%% Created : 4 Sep 2017 by Torbjorn Tornkvist <kruskakli@gmail.com>
+%%%-------------------------------------------------------------------
 -module(edbg_tracer).
 
 -export([file/0
@@ -12,14 +203,8 @@
          , send/2
          , start_my_tracer/0
          , tlist/0
-         , tmax/1
-         , tquit/0
-         , traw/1
-         , tstart/0
-         , tstart/1
-         , tstart/2
-         , tstart/3
-         , tstop/0
+         , xfile/0
+         , xfile/1
         ]).
 
 -import(edbg_file_tracer,
@@ -51,6 +236,10 @@
 
 -include("edbg_trace.hrl").
 
+%%-define(TEST, true).
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+-endif.
 
 
 
@@ -80,9 +269,11 @@
 
 -record(t, {
           trace_max = 10000,
-          tracer
+          tracer,
+          elixir = false
          }).
 
+%% @private
 start_my_tracer() ->
     case whereis(?mytracer) of
         Pid when is_pid(Pid) ->
@@ -93,6 +284,7 @@ start_my_tracer() ->
             Pid
     end.
 
+%% @private
 fhelp() ->
     S = "\n"
     "edbg:fstart(ModFunList, Opts)\n"
@@ -130,15 +322,30 @@ fhelp() ->
 %%dbg:p(all,clear).
 %%dbg:p(all,[c]).
 
-%% @doc Enter trace list mode based on given trace file.
+%% @private
 file() ->
     file("./edbg.trace_result").
 
+%% @private
 file(Fname) ->
+    file(Fname, false).
+
+
+%% @private
+xfile() ->
+    xfile("./edbg.trace_result").
+
+%% @private
+xfile(Fname) ->
+    file(Fname, true).
+
+
+file(Fname, IsElixir) ->
     catch stop_trace(),
     catch edbg_file_tracer:stop(),
     try file:read_file(Fname) of
         {ok, Tdata} ->
+            call(start_my_tracer(), {elixir, IsElixir}),
             %% We expect Tdata to be a list of trace tuples as
             %% a binary in the external term form.
             call(start_my_tracer(), {load_trace_data,
@@ -151,15 +358,17 @@ file(Fname) ->
             {error, Err}
     end.
 
-%% @doc Start tracing to file.
+%% @private
 fstart() ->
     edbg_file_tracer:start(),
     edbg_file_tracer:load_config(),
     start_trace().
 
+%% @private
 fstart(ModFunList) ->
     fstart(ModFunList, []).
 
+%% @private
 fstart(ModFunList, Options)
   when is_list(ModFunList) andalso
        is_list(Options) ->
@@ -199,11 +408,13 @@ fstart(ModFunList, Options)
     set_config(MFs++Opts, get_config()),
     start_trace().
 
+%% @private
 fstop() ->
     edbg_file_tracer:stop_trace(),
     edbg_file_tracer:stop().
 
 
+%% @private
 get_traced_pid() ->
     case get_trace_spec() of
         Pid when is_pid(Pid) -> Pid;
@@ -211,20 +422,7 @@ get_traced_pid() ->
     end.
 
 
-tstart() ->
-    start_my_tracer().
 
-tstart(Mod) when is_atom(Mod) ->
-    tstart(Mod, []).
-
-tstart(Mod, Mods) when is_atom(Mod) andalso is_list(Mods)  ->
-    tstart(Mod, Mods, []).
-
-tstart(Mod, Mods, Opts) when is_atom(Mod) andalso is_list(Mods)  ->
-    trace_start({Mod, Mods, Opts}, Opts).
-
-trace_start(FilterInput, Opts) ->
-    call(start_my_tracer(), {start, FilterInput, Opts}).
 
 call(MyTracer, Msg) ->
     MyTracer ! {self(), Msg},
@@ -233,11 +431,13 @@ call(MyTracer, Msg) ->
             Result
     end.
 
+%% @private
 lts() ->
     {ok,[X]} = file:consult("trace.edbg"),
     call(start_my_tracer(), X).
 
 
+%% @private
 tlist() ->
     Self = self(),
     Prompt = spawn_link(fun() -> prompt(Self) end),
@@ -245,6 +445,7 @@ tlist() ->
     ?mytracer ! at,
     ploop(Prompt).
 
+%% @private
 ploop(Prompt) ->
     receive
         {'EXIT', Prompt, _} ->
@@ -262,6 +463,7 @@ prompt(Pid) when is_pid(Pid) ->
     Prompt = "tlist> ",
     rloop(Pid, Prompt).
 
+%% @private
 rloop(Pid, Prompt) ->
     case string:tokens(b2l(io:get_line(Prompt)), "\n") of
         ["eval"++X] -> xeval(?mytracer, X);
@@ -301,26 +503,59 @@ b2l(L) when is_list(L) ->
 
 find(Pid, X) ->
     try
-        Xstr = string:strip(X),
-        case string:tokens(Xstr, ":") of
-            [M,F] ->
-                case string:tokens(F, " ") of
-                    [F1] ->
-                        Pid ! {find, {M,F1}};
-                    [F1,An,Av] ->
-                        Pid ! {find, {M,F1},{list_to_integer(An),Av}}
-                end;
-            [M|_] ->
-                case string:chr(Xstr, $:) of
-                    I when I > 0 ->
-                        Pid ! {find, {M,""}};
-                    _ ->
-                        Pid ! {find_str, Xstr}
-                end
+        case string:strip(X) of
+            "~r"++Xstr ->
+                %% Find a match among the return values
+                Pid ! {find, {ret, Xstr}};
+            Xstr ->
+                %% Search by Regexp
+                {Str,Args} = find_args(Xstr),
+                Pid ! {find, {rexp, Str, Args}}
         end
     catch
         _:_ -> false
     end.
+
+
+
+find_args(AStr) ->
+    find_args(AStr, []).
+
+find_args([$\\,$\\|T], Acc) ->
+    find_args(T, [$\\|Acc]);
+find_args([$\\,$\s|T], Acc) ->
+    find_args(T, [$\s|Acc]);
+find_args([$\s|T], Acc) ->
+    Str = lists:reverse(Acc),
+    case string:tokens(T, " ") of
+        [An,Av] ->
+            {Str, {list_to_integer(An),Av}};
+        _ ->
+            {Str, undefined}
+    end;
+find_args([H|T], Acc) ->
+    find_args(T, [H|Acc]);
+find_args([], Acc) ->
+    Str = lists:reverse(Acc),
+    {Str, undefined}.
+
+
+-ifdef(EUNIT).
+
+find_args_test_() ->
+    [?_assertMatch({"lists:rev", undefined},
+                   find_args("lists:rev")),
+     ?_assertMatch({"lists:rev", {1,"rune"}},
+                   find_args("lists:rev 1 rune")),
+     ?_assertMatch({"abc def", undefined},
+                   find_args("abc\\ def")),
+     ?_assertMatch({"abc def", {2,"rune"}},
+                   find_args("abc\\ def 2 rune"))
+    ].
+
+-endif.
+
+
 
 on(Pid, X) ->
     case string:strip(X) of
@@ -470,7 +705,7 @@ print_help() ->
     S1 = " (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom",
     S2 = " (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>",
     S3 = " (pr)etty print record <N> <ArgN>",
-    S4 = " (f)ind <M>:<Fx> [<ArgN> <ArgVal>] | <RetVal>",
+    S4 = " (f)ind <RegExp> [<ArgN> <ArgRegExp>] | ~r<RegExp>",
     S5 = " (on)/(off) send_receive | memory",
     S6 = " (p)agesize <N> (q)uit",
     S7 = " (set) <Var> <N> [<ArgN>]  (let) <Var> <Expr>",
@@ -480,16 +715,14 @@ print_help() ->
     ?info_msg(?help_hi(S), []).
 
 
-tstop() -> ?mytracer ! stop.
-traw(N) when is_integer(N)  -> ?mytracer ! {raw,N}.
-tquit() -> ?mytracer ! quit.
-tmax(N) when is_integer(N) -> ?mytracer ! {max,N}.
+
 
 tinit(X) ->
     process_flag(trap_exit, true),
     ?MODULE:tloop(X, #tlist{}, []).
 
 
+%% @private
 tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
     receive
 
@@ -508,6 +741,10 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
 
 
         %% FROM EDBG
+
+        {From, {elixir, Bool}} ->
+            From ! {self(), ok},
+            ?MODULE:tloop(X#t{elixir = Bool}, Tlist ,Buf);
 
         {max, N} ->
             ?MODULE:tloop(X#t{trace_max = N}, Tlist ,Buf);
@@ -687,37 +924,8 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist ,Buf);
 
 
-        %% Find a matching function call
-        {find, {Mstr,Fstr}} ->
-            NewTlist = case find_mf(Tlist#tlist.at, Buf, Mstr, Fstr) of
-                           not_found ->
-                               ?info_msg("not found~n",[]),
-                               Tlist;
-                           NewAt ->
-                               list_trace(Tlist#tlist{at = NewAt}, Buf)
-                       end,
-            ?MODULE:tloop(X, NewTlist ,Buf);
-
-        %% Find a matching function call where ArgN contains Value
-        {find, {Mstr,Fstr},{An,Av}} ->
-            NewTlist = case find_mf_av(Tlist#tlist.at,Buf,Mstr,Fstr,An,Av) of
-                           not_found ->
-                               ?info_msg("not found~n",[]),
-                               Tlist;
-                           NewAt ->
-                               list_trace(Tlist#tlist{at = NewAt}, Buf)
-                       end,
-            ?MODULE:tloop(X, NewTlist ,Buf);
-
-        %% Find a match among the return values
-        {find_str, Str} ->
-            NewTlist = case find_retval(Tlist#tlist.at, Buf, Str) of
-                           not_found ->
-                               ?info_msg("not found~n",[]),
-                               Tlist;
-                           NewAt ->
-                               list_trace(Tlist#tlist{at = NewAt}, Buf)
-                       end,
+        {find, What} ->
+            NewTlist = do_find(Tlist, Buf, What),
             ?MODULE:tloop(X, NewTlist ,Buf);
 
         top ->
@@ -802,6 +1010,33 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist ,Buf)
     end.
 
+%% Find a match among the return values
+do_find(Tlist, Buf, {ret, Str}) ->
+    case find_retval(Tlist#tlist.at, Buf, Str) of
+        not_found ->
+            ?info_msg("not found~n",[]),
+            Tlist;
+        NewAt ->
+            list_trace(Tlist#tlist{at = NewAt}, Buf)
+    end;
+do_find(Tlist, Buf, {rexp, Str, undefined}) ->
+    case xfind_mf(Tlist#tlist.at, Buf, Str) of
+        not_found ->
+            ?info_msg("not found~n",[]),
+            Tlist;
+        NewAt ->
+            list_trace(Tlist#tlist{at = NewAt}, Buf)
+    end;
+do_find(Tlist, Buf, {rexp, Str, {An,Av}}) ->
+    case xfind_mf_av(Tlist#tlist.at, Buf, Str, An, Av) of
+        not_found ->
+            ?info_msg("not found~n",[]),
+            Tlist;
+        NewAt ->
+            list_trace(Tlist#tlist{at = NewAt}, Buf)
+    end.
+
+
 add_binding(#tlist{bs = Bs} = T, Var, Val) ->
     T#tlist{bs = erl_eval:add_binding(list_to_atom(Var), Val, Bs)}.
 
@@ -824,8 +1059,8 @@ show_rec(ArgN, {M,F,A}) ->
                pp_record:print(lists:nth(ArgN,A), Defs)]).
 
 
-find_mf(At, Buf, Mstr, Fstr) ->
-    Mod = list_to_atom(Mstr),
+%% Do a RegExp search in "Mod:Fun"
+xfind_mf(At, Buf, Str) ->
     %% First get the set of trace messages to investigate
     L = lists:takewhile(
           fun({N,_}) when N>=At -> true;
@@ -833,16 +1068,10 @@ find_mf(At, Buf, Mstr, Fstr) ->
           end, Buf),
     %% Discard non-matching calls
     R = lists:dropwhile(
-          fun({_N, ?CALL(_Pid, {M,_,_}, _As)}) when M == Mod andalso
-                                                        Fstr == "" ->
-                  false;
-             ({_N, ?CALL_TS(_Pid, {M,_,_}, _TS, _As)}) when M == Mod andalso
-                                                            Fstr == "" ->
-                  false;
-             ({_N, ?CALL(_Pid, {M,F,_}, _As)}) when M == Mod ->
-                  not(lists:prefix(Fstr, atom_to_list(F)));
-             ({_N, ?CALL_TS(_Pid, {M,F,_}, _TS, _As)}) when M == Mod ->
-                  not(lists:prefix(Fstr, atom_to_list(F)));
+          fun({_N, ?CALL(_Pid, {M,F,_}, _As)}) ->
+                  re_match(atom_to_list(M)++":"++atom_to_list(F), Str);
+             ({_N, ?CALL_TS(_Pid, {M,F,_}, _TS, _As)}) ->
+                  re_match(atom_to_list(M)++":"++atom_to_list(F), Str);
              (_) ->
                   true
           end, lists:reverse(L)),
@@ -851,8 +1080,8 @@ find_mf(At, Buf, Mstr, Fstr) ->
         _         -> not_found
     end.
 
-find_mf_av(At, Buf, Mstr, Fstr, An, Av) ->
-    Mod = list_to_atom(Mstr),
+
+xfind_mf_av(At, Buf, Str, An, Av) ->
     %% First get the set of trace messages to investigate
     L = lists:takewhile(
           fun({N,_}) when N>=At -> true;
@@ -860,13 +1089,17 @@ find_mf_av(At, Buf, Mstr, Fstr, An, Av) ->
           end, Buf),
     %% Discard non-matching calls
     R = lists:dropwhile(
-          fun({_N, ?CALL(_Pid, {M,F,A}, _As)}) when M == Mod andalso
-                                                    length(A) >= An ->
-                  do_find_mf_av(Fstr, An, Av, F, A);
-             ({_N, ?CALL_TS(_Pid, {M,F,A}, _TS, _As)}) when M == Mod andalso
-                                                            length(A) >= An ->
-                  do_find_mf_av(Fstr, An, Av, F, A);
-             (_) ->
+          fun({_N, ?CALL(_Pid, {M,F,A}, _As)}) when length(A) >= An ->
+                  Arg = lists:nth(An, A),
+                  re_match(atom_to_list(M)++":"++atom_to_list(F), Str)
+                      orelse
+                      re_match(lists:flatten(io_lib:format("~p",[Arg])), Av);
+             ({_N, ?CALL_TS(_Pid, {M,F,A}, _TS, _As)}) when length(A) >= An ->
+                  Arg = lists:nth(An, A),
+                  re_match(atom_to_list(M)++":"++atom_to_list(F), Str)
+                      orelse
+                      re_match(lists:flatten(io_lib:format("~p",[Arg])), Av);
+              (_) ->
                   true
           end, lists:reverse(L)),
     case R of
@@ -874,19 +1107,16 @@ find_mf_av(At, Buf, Mstr, Fstr, An, Av) ->
         _         -> not_found
     end.
 
-do_find_mf_av(Fstr, An, Av, F, A) ->
-    case lists:prefix(Fstr, atom_to_list(F)) of
-        true ->
-            ArgStr = lists:flatten(io_lib:format("~p",[lists:nth(An,A)])),
-            try re:run(ArgStr,Av) of
-                nomatch -> true;
-                _       -> false
-            catch
-                _:_ -> true
-            end;
-        _ ->
-            true
+
+
+re_match(Str, Rexp) ->
+    try re:run(Str, Rexp) of
+        nomatch -> true;
+        _       -> false
+    catch
+        _:_ -> true
     end.
+
 
 get_buf_at(At, Buf) ->
     lists:takewhile(
@@ -1293,6 +1523,7 @@ pad(N) ->
 pad(N,C) ->
     lists:duplicate(N,C).
 
+%% @private
 send(Pid, Msg) ->
     Pid ! {trace, self(), Msg},
     receive

@@ -1,3 +1,7 @@
+%%% @doc false
+%%% @hidden
+%%% @end
+
 %%
 %% Code ripped and stripped from https://github.com/julianduque/erlang-color
 %%
@@ -32,21 +36,37 @@
 
 %% public API
 
+%% @private
 black(Text)    -> [color(?BLACK),    Text, reset()].
+%% @private
 blackb(Text)   -> [colorb(?BLACK),   Text, reset()].
+%% @private
 red(Text)      -> [color(?RED),      Text, reset()].
+%% @private
 redb(Text)     -> [colorb(?RED),     Text, reset()].
+%% @private
 green(Text)    -> [color(?GREEN),    Text, reset()].
+%% @private
 greenb(Text)   -> [colorb(?GREEN),   Text, reset()].
+%% @private
 yellow(Text)   -> [color(?YELLOW),   Text, reset()].
+%% @private
 yellowb(Text)  -> [colorb(?YELLOW),  Text, reset()].
+%% @private
 blue(Text)     -> [color(?BLUE),     Text, reset()].
+%% @private
 blueb(Text)    -> [colorb(?BLUE),    Text, reset()].
+%% @private
 magenta(Text)  -> [color(?MAGENTA),  Text, reset()].
+%% @private
 magentab(Text) -> [colorb(?MAGENTA), Text, reset()].
+%% @private
 cyan(Text)     -> [color(?CYAN),     Text, reset()].
+%% @private
 cyanb(Text)    -> [colorb(?CYAN),    Text, reset()].
+%% @private
 white(Text)    -> [color(?WHITE),    Text, reset()].
+%% @private
 whiteb(Text)   -> [colorb(?WHITE),   Text, reset()].
 
 

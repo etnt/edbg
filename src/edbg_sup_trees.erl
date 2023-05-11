@@ -1,7 +1,149 @@
 %%%-------------------------------------------------------------------
+%%% @author Torbjorn Tornkvist <kruskakli@gmail.com>
+%%% @copyright (C) 2017, Torbjorn Tornkvist
 %%% @doc Explore all supervision trees
 %%%
+%%% Display all supervisors we have found in our system.
+%%%
+%%% Each line has a number that can be referenced,
+%%% where the `S' mean that the process is a supervisor.
+%%%
+%%% ```
+%%%   (abc@ozzy)1> edbg:suptrees().
+%%%   1:S kernel_safe_sup <0.74.0> []
+%%%   2:S kernel_sup <0.49.0> [erl_distribution]
+%%%  23:S logger_sup <0.75.0> []
+%%%  27:S net_sup <0.57.0> []
+%%%
+%%%  (h)elp e(x)pand [<N>] (s)hrink [<N>]
+%%%  (p)rocess info [<N> [<M>]] (b)acktrace [<N> [<M>]]
+%%%  (r)efresh (q)uit
+%%% '''
+%%%
+%%% Note the short help text; we will now go through what those commands does.
+%%%
+%%% First let us expand supervisor 23 to see its children. Note the indentation
+%%% and the `G' which mean that the process is a `gen_server' process,
+%%% where `W' mean some other worker process.
+%%%
+%%% ```
+%%% suptrees> x 23
+%%% 1:S kernel_safe_sup <0.74.0> []
+%%% 2:S kernel_sup <0.49.0> [erl_distribution]
+%%% 23:S logger_sup <0.75.0> []
+%%% 24:G   default <0.79.0> [logger_h_common]
+%%% 25:G   logger_proxy <0.77.0> [logger_proxy]
+%%% 26:G   logger_handler_watcher <0.76.0> [logger_handler_watcher]
+%%% 27:S net_sup <0.57.0> []
+%%% '''
+%%%
+%%% Print the process-info of worker 24 Note the list of linked processes.
+%%%
+%%% ```
+%%%   suptrees> p 24
+%%%
+%%%   === Process Info: <0.79.0>
+%%%   [{registered_name,logger_std_h_default},
+%%%   {current_function,{gen_server,loop,7}},
+%%%   {initial_call,{proc_lib,init_p,5}},
+%%%   {status,waiting},
+%%%   {message_queue_len,0},
+%%%   {links,[<0.75.0>,<0.80.0>]},
+%%%   {dictionary,
+%%%        [{'$ancest...snip...
+%%% '''
+%%%
+%%% We can also print the process info of any linked processes.
+%%% Let us print the process-info of the second process in the links list.
+%%%
+%%% ```
+%%%   suptrees> p 24 2
+%%%
+%%%   === Process Info: <0.80.0>
+%%%   [{current_function,{logger_std_h,file_ctrl_loop,1}},
+%%%   {initial_call,{erlang,apply,2}},
+%%%   {status,waiting},
+%%%   {message_queue_len,0},
+%%%   {links,[<0.79.0>]},
+%%%   {diction.....snip...
+%%% '''
+%%%
+%%% We can continue like this...
+%%%
+%%% ```
+%%%   suptrees> p 24 2 1
+%%%
+%%%   === Process Info: <0.79.0>
+%%%   [{registered_name,logger_std_h_default},
+%%%   {current_function,{gen_server,loop,7}},
+%%%   {initial_call,{proc_lib,init_p,5}},
+%%%   {status,waiting},
+%%%   {message_queue_len,0},
+%%%   {links,[<0.75.0>,<0.80.0>]},
+%%%   {dictionary,....snip...
+%%% '''
+%%%
+%%% We can also print the process backtrace in the same way:
+%%%
+%%% ```
+%%%   suptrees> b 24 2
+%%%    ...snip...
+%%% '''
+%%%
+%%% We can also setup a monitor for a process:
+%%%
+%%% ```
+%%%   suptrees> m 161 2
+%%%
+%%%   Monitoring: <0.343.0>
+%%%
+%%%   ...do stuff, crunch...
+%%%
+%%%   Monitor got DOWN from: <0.343.0> , Reason: shutdown
+%%% '''
+%%%
+%%% We can print the state of a gen_server.
+%%% Let say we have the following:
+%%%
+%%% ```
+%%%   1:S kernel_safe_sup <0.74.0> []
+%%%   2:S kernel_sup <0.49.0> [erl_distribution]
+%%%   3:S   logger_sup <0.75.0> []
+%%%   4:G     default <0.79.0> [logger_h_common]
+%%%    ...snip...
+%%% '''
+%%%
+%%% Now print the state of the &lt;0.79.0&gt; gen_server process.
+%%%
+%%% ```
+%%%   suptrees> g 4
+%%%
+%%%   Process State: <0.79.0>
+%%%   #{burst_limit_enable => true,burst_limit_max_count => 500,
+%%%   burst_limit_window_time => 1000,burst_msg_count => 0,
+%%%    ...snip..
+%%% '''
+%%%
+%%% You can start tracing on a process like this:
+%%%
+%%% ```
+%%%   suptrees> ts 4
+%%% '''
+%%%
+%%% You stop the tracing like this:
+%%%
+%%% ```
+%%%   suptrees> te
+%%% '''
+%%%
+%%% You show the trace output (like with {@link edbg:file/0} ) like this:
+%%%
+%%% ```
+%%% suptrees> tf
+%%% '''
+%%%
 %%% @end
+%%% Created : 14 Dec 2022 by Torbjorn Tornkvist <kruskakli@gmail.com>
 %%%-------------------------------------------------------------------
 -module(edbg_sup_trees).
 
@@ -72,7 +214,7 @@
          gen_module
         }).
 
-
+%% @doc Enter the Supervisor Tree Browser.
 start() ->
     Self = self(),
     Prompt = spawn_link(fun() -> prompt(Self) end),
@@ -98,6 +240,7 @@ prompt(Pid) when is_pid(Pid) ->
     loop(Pid, prompt(), State).
 
 
+%% @private
 loop(Pid, Prompt, State0) ->
     io:format("~n",[]),
     State =
@@ -502,9 +645,11 @@ print_help() ->
     ?info_msg(?help_hi(S), []).
 
 
+%% @private
 supervisors() ->
     supervisors(kernel_sup).
 
+%% @private
 supervisors(Supervisor) when is_atom(Supervisor) ->
     supervisors(Supervisor, new_sup_tree(Supervisor)).
 
@@ -560,6 +705,7 @@ is_gen_server(_) ->
 %% try to figure out if they are a supervisor.
 %% Is there a better way?
 %% Can a supervisor not be registered and hence not be included here?
+%% @private
 all_sup_trees() ->
     Sups = lists:foldr(
              fun(Id,Acc) ->

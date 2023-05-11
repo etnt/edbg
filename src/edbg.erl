@@ -1,4 +1,28 @@
+%%%-------------------------------------------------------------------
+%%% @author Torbjorn Tornkvist <kruskakli@gmail.com>
+%%% @copyright (C) 2017, Torbjorn Tornkvist
+%%% @doc edbg - Erlang/Elixir trace and debug tool
+%%%
+%%% `edbg' is a tty based interface to the Erlang debugger/tracer
+%%% and the supervisor trees.
+%%%
+%%% This module is the main interface to `edbg'.
+%%%
+%%% Note that most of the functions here relates to the debugger
+%%% functionality.
+%%%
+%%% For tracing you only need the functions: {@link fstart/2} ,
+%%% {@link fstop/0}, {@link file/0}, {@link xfile/0}
+%%% (and possibly some variants of the argument number).
+%%%
+%%% For the Supervisor Tree Browser, you only need:
+%%% {@link suptrees/0}.
+%%%
+%%% @end
+%%% Created : 4 Sep 2017 by Torbjorn Tornkvist <kruskakli@gmail.com>
+%%%-------------------------------------------------------------------
 -module(edbg).
+
 -on_load(init_edbg/0).
 
 -export([a/0,
@@ -60,6 +84,7 @@
          n/3,
          next/1,
          next/3,
+         sab/0,
          save_all_breakpoints/0,
          s/1,
          s/3,
@@ -68,11 +93,9 @@
          suptrees/0,
          t/2,
          t/3,
-         tlist/0,
          lts/0,
-         tstart/2,
-         tstart/3,
-         tquit/0
+         xfile/0,
+         xfile/1
         ]).
 
 %% Internal export
@@ -109,17 +132,32 @@
 -endif.
 
 
+%% @private
 init_edbg() ->
     ok = ?edbg_color_srv_init().
 
+%% @private
 lts() ->
     edbg_tracer:lts().
 
+%% @doc As 'file/1' but uses the default trace output filename.
 file() ->
     edbg_tracer:file().
 
+%% @doc Load the trace output from the file 'Fname'.
+%%
+%% When the file is loaded, enter the trace list mode.
+%% @end
 file(Fname) ->
     edbg_tracer:file(Fname).
+
+%% @doc As 'file/0' but hint that Elixir code is traced.
+xfile() ->
+    edbg_tracer:xfile().
+
+%% @doc As 'file/1' but hint that Elixir code is traced.
+xfile(Fname) ->
+    edbg_tracer:xfile(Fname).
 
 %% @doc Start tracing making use of a previously stored configuration.
 %%
@@ -130,131 +168,299 @@ file(Fname) ->
 fstart() ->
     edbg_tracer:fstart().
 
+%% @doc Start tracing making use of a previously stored configuration.
+%%
+%% A previous call to 'fstart/2' will store the configuration
+%% on disk so that it can be resued when calling this function.
+%%
+%% @end
 fstart(ModFunList) ->
     edbg_tracer:fstart(ModFunList).
 
+%% @doc Start tracing to file.
+%%
+%% 'ModFunList' is a list of module names (atoms)
+%% or tuples {ModuleName, FunctionName}. This makes it possible to trace
+%% on all functions within a Module, or just a few functions within a Module.
+%%
+%% 'Opts' is a list of option tuples:
+%%
+%% <ul>
+%%   <li>{log_file, FileName} : file where to store trace output; default: 'edbg.trace_result'</li>
+%%   <li>{max_msgs, MaxNumOfMsgs} : max number of trace messages; default = 1000</li>
+%%   <li>{trace_time, Seconds} : max time to trace; default = 10 seconds</li>
+%%   <li>{trace_spec, Spec} : see the erlang:trace/3 docs; default = all</li>
+%%   <li>dump_output_eager : trace output goes to file often</li>
+%%   <li>dump_output_lazy : trace output goes to file not so often (default)</li>
+%%   <li>monotonic_ts : show the elapsed monotonic nano seconds</li>
+%%   <li>send_receive : trace send/receive messages from 'known' pids</li>
+%%   <li>memory : track the memory usage of the 'known' pids</li>
+%% </ul>
+%%
+%% Tracing in an Erlang node is setup by the 'erlang:trace/3' and
+%% 'erlang:trace_pattern/3' BIF's. The generated trace output in
+%% a production system can quickly produce a staggering amount of
+%% data, which easily can swamp the whole system, so that it becomes
+%% unusable.
+%%
+%% It is therefore important to restrict what to trace, the amount of
+%% generated trace messages and the maximum time we allow tracing to go on.
+%% 'edbg' helps you with this but you can still brake
+%% your system if you are careless setting the trace parameters.
+%%
+%% With the `max_msgs' and `trace_time' parameters you can
+%% restrict the amount of generated trace messages and running time
+%% before stopping the tracing.
+%%
+%% The `trace_spec' is also a way of restricting what to trace on.
+%% Default is `all', but for later OTP versions (> 18.3): `processes'
+%% is available and would be more specific.
+%% For more info about this, see the 'erlang:trace/3' documentation.
+%%
+%% With the `dump_output_lazy' switch set, trace output goes to file not
+%% until the tracer is stopped (e.g by calling the 'file/1' function), or
+%% that a limiting filter such as `max_msg' or `trace_time' is reached.
+%% This is the default.
+%%
+%% With the `dump_output_eager' switch set, trace output goes to file often
+%% which may be necessary if you run edbg tracing and the system unexpectedly
+%% shuts down.
+%%
+%% With the `monotonic_ts' switch set, each trace message will have a
+%% monotonic timestamp, in nanoseconds, attached to it. This will be displayed
+%% in the call graph as the elapsed time counted from the first received
+%% trace message.
+%%
+%% With the `send_receive' switch set, we will also trace messages sent and
+%% received by 'known' pids. By 'known' pids we mean processes that we have
+%% seen earlier in a traced call. The reason for this is to avoid beig swamped
+%% by all the messages that the trace BIF is sending us. Note that we still
+%% may get a lots of messages that will cause the resulting trace file to be
+%% large and make the handling of it slower. The display of sent and received
+%% messages can be toggled on/off from the trace command prompt, see also the
+%% trace examples.
+%%
+%% With the `memory' switch set, we will also track the memory usage of
+%% the processes that we get trace messages for. The memory size shown
+%% is the size in bytes of the process. This includes call stack, heap,
+%% and internal structures, as what we get from the process_info(Pid, memory)
+%% BIF.
+%%
+%% NOTE: we run the process_info/2 BIF when we receive the
+%% trace message from the BEAM engine so the memory size we present does
+%% not exactly represent the state of the process at the creation of the
+%% trace message.
+%%
+%%
+%%```
+%%    % Example, trace calls to the foo module, no more than 1000 trace msgs
+%%    edbg:fstart([foo], [{max_msgs, 1000}]).
+%%'''
+%%
+%%
+%%```
+%%    % Example, trace all modules in a particular process,
+%%    % dump the traced output to file often,
+%%    % no more than 1000 trace msgs.
+%%    edbg:fstart([], [{trace_spec,Pid}, dump_output_eager, {max_msgs, 1000}]).
+%% '''
+%%
+%% @end
 fstart(ModFunList, Options) ->
     edbg_tracer:fstart(ModFunList, Options).
 
+%% @doc Stop tracing and dump the trace output to file.
 fstop() ->
     edbg_tracer:fstop().
 
+%% @doc Start tracing the process: 'Pid'.
+%%
+%% A qick way of start tracing a process.
+%%
+%% The Options are set to be:
+%%
+%% ```
+%%   [dump_output_eager,
+%%    send_receive,
+%%    {max_msgs, 1000000}]
+%% '''
+%%
+%% @end
 fpid(Pid) when is_pid(Pid) ->
     fpid(Pid, [dump_output_eager,
                send_receive,
                {max_msgs, 1000000}]).
 
+%% @doc Start tracing the process: 'Pid'.
+%%
+%% Start tracing the process. The Options are the same as
+%% for the 'fstart/2' function-
+%%
+%% @end
 fpid(Pid, Options) when is_pid(Pid) andalso is_list(Options) ->
     edbg:fstart([], [{trace_spec,Pid} | Options]),
     io:format("~n~s ~s ~p~n",[?c_warn("<INFO>"),"Tracing on Pid:",Pid]).
 
+%% @doc Display a short help text.
 fhelp() ->
     edbg_tracer:fhelp().
 
+%% @doc Enter the Supervisor Tree Browser.
+%% @see edbg_sup_trees
 suptrees() ->
     edbg_sup_trees:start().
 
-tquit() ->
-    edbg_tracer:tquit().
 
-tstart(Mod, Mods) ->
-    edbg_tracer:tstart(Mod,Mods).
+%% @doc Show all interpreted processes.
+pl() ->
+ plist().
 
-tstart(Mod, Mods, Opts) when is_atom(Mod) andalso
-                             is_list(Mods) andalso
-                             is_list(Opts) ->
-    edbg_tracer:tstart(Mod,Mods,Opts).
-
-
-tlist() ->
-    edbg_tracer:tlist().
-
-pl() -> plist().
-
+%% @doc As 'mlist/1'.
 ml(X) -> mlist(X).
+%% @doc As 'mlist/2'.
 ml(X,Y) -> mlist(X,Y).
+%% @doc As 'mlist/3'.
 ml(X,Y,Z) -> mlist(X,Y,Z).
 
-
-br() -> breaks().
+%% @doc Display all break points.
+br() ->
+    breaks().
+%% @doc Display all break points.
 breaks() ->
     print_all_breakpoints(int:all_breaks()).
 
-br(Mod) -> breaks(Mod).
+%% @doc Display all break points for module 'Mod'.
+br(Mod) ->
+    breaks(Mod).
+%% @doc Display all break points for module 'Mod'.
 breaks(Mod) ->
     print_all_breakpoints(int:all_breaks(Mod)).
 
+%% @doc Set a break point in 'Mod' at line 'Line'.
 b(Mod, Line) ->
     break(Mod,Line).
 
+%% @doc Set a break point in 'Mod' at line 'Line'.
 break(Mod, Line) ->
     ok = int:break(Mod, Line),
     save_all_breakpoints(),
     ok.
 
-bdel() -> delete_breaks().
+%% @doc Delete all break points.
+bdel() ->
+    delete_breaks().
+
+%% @doc Delete all break points.
 delete_breaks() ->
     [delete_break(Mod, Line) || {{Mod, Line},_} <- int:all_breaks()].
 
-bdel(Mod, Line) -> delete_break(Mod, Line).
+%% @doc Delete the break point in 'Mod' on line 'Line'.
+bdel(Mod, Line) ->
+    delete_break(Mod, Line).
+%% @doc Delete the break point in 'Mod' on line 'Line'.
 delete_break(Mod, Line) ->
     ok = int:delete_break(Mod, Line),
     save_all_breakpoints(),
     ok.
 
-boff() -> disable_breaks().
+%% @doc Disable all break points.
+boff() ->
+    disable_breaks().
+%% @doc Disable all break points.
 disable_breaks() ->
     [disable_break(Mod, Line) || {{Mod, Line},_} <- int:all_breaks()].
 
-boff(Mod, Line) -> disable_break(Mod, Line).
+%% @doc Disable the break point in 'Mod' on line 'Line'.
+boff(Mod, Line) ->
+    disable_break(Mod, Line).
+%% @doc Disable the break point in 'Mod' on line 'Line'.
 disable_break(Mod, Line) ->
     ok = int:disable_break(Mod, Line),
     save_all_breakpoints(),
     ok.
 
-bon() -> enable_breaks().
+
+%% @doc Disable all break points.
+bon() ->
+    enable_breaks().
+%% @doc Disable all break points.
 enable_breaks() ->
     [enable_break(Mod, Line) || {{Mod, Line},_} <- int:all_breaks()].
 
-bon(Mod, Line) -> enable_break(Mod, Line).
+%% @doc Enable the break point in 'Mod' on line 'Line'.
+bon(Mod, Line) ->
+    enable_break(Mod, Line).
+%% @doc Enable the break point in 'Mod' on line 'Line'.
 enable_break(Mod, Line) ->
     ok = int:enable_break(Mod, Line),
     save_all_breakpoints(),
     ok.
 
 
-c(Pid) -> continue(Pid).
+%% @doc Continue the execution of the given process 'Pid'.
+c(Pid) ->
+    continue(Pid).
 
-c(P0, P1, P2) -> continue(c:pid(P0, P1, P2)).
+%% @doc Continue the execution of the given process &lt;P0.P1.P2&gt;.
+c(P0, P1, P2) ->
+    continue(c:pid(P0, P1, P2)).
 
-continue(P0, P1, P2) -> continue(c:pid(P0, P1, P2)).
+%% @doc Continue the execution of the given process &lt;P0.P1.P2&gt;.
+continue(P0, P1, P2) ->
+    continue(c:pid(P0, P1, P2)).
 
+%% @doc Continue the execution of the given process 'Pid'.
 continue(Pid) when is_pid(Pid) ->
     int:continue(Pid).
 
 %% FIXME doesn't work ?
+%% @private
 break_in(Mod, Line, Arity) ->
     int:break_in(Mod, Line, Arity).
 
+%% @doc Start interpret the module 'Mod'.
+%%
+%% With only one argument, you don't set an explicit break point,
+%% but you will be able to step into the module while debugging.
+%% @end
 i(Mod) ->
     Fname = find_source(Mod),
     int:i(Fname).
 
+%% @doc Show all interpreted modules.
 id() ->
     int:interpreted().
 
+%% @doc Start interpret module 'Mod' and set a break point at line 'Line'.
 i(Mod,Line) ->
     Fname = find_source(Mod),
     int:i(Fname),
     int:delete_break(Mod, Line),
     break(Mod, Line).
 
+%% @doc Start interpret module 'Mod' and set a conditional break point.
+%%
+%% Start interpret module 'Mod' and set a conditional break point
+%% in 'Mod' at line 'Line'.
+%% The 'Fun/1' as an anonymous function of arity 1 that gets executed
+%% each time the break point is passed. When the 'Fun/1' returns
+%% 'true' the break point will trigger and the execution will stop,
+%% else the execution will continue.
+%%
+%% The 'Fun/1' takes an argument which will be a list of current Variable
+%% bindings; typically it makes use of the function
+%% 'int:get_binding(Var, Bindings)' (where 'Var' is an atom denoting a
+%% particular variable) to decide if the break point should trigger
+%% or not. See the example further below for how to use it.
+%%
+%% Note that only one interactive trigger function can be used at a time.
+%% @end
 it(Mod,Line,Fun) when is_function(Fun)  ->
     Fname = find_source(Mod),
     int:i(Fname),
     t(Mod,Line,Fun).
 
-%% Reuse the existing trigger function!
+%% @doc As 't/3' but will reuse an existing trigger function.
 t(Mod,Line) ->
     int:delete_break(Mod, Line),
     ok = int:break(Mod, Line),
@@ -262,6 +468,7 @@ t(Mod,Line) ->
     save_all_breakpoints(),
     ok.
 
+%% @doc As 'it/3' but assumes 'Mod' already is interpreted.
 t(Mod,Line,Fun) when is_function(Fun)  ->
     int:delete_break(Mod, Line),
     ok = itest_at_break(Fun),
@@ -274,6 +481,7 @@ t(Mod,Line,Fun) when is_function(Fun)  ->
 
 -define(itest_at_break, itest_at_break).
 
+%% @private
 itest_at_break(Fun) when is_function(Fun) ->
     case whereis(?itest_at_break) of
         Pid when is_pid(Pid) ->
@@ -306,7 +514,7 @@ itest_at_break(Bindings) ->
             false
     end.
 
-
+%% @private
 it_loop(Fun) ->
     receive
         {From, cond_fun, NewFun} ->
@@ -350,37 +558,56 @@ get_it_break_fun() ->
     end.
 
 
-s(Pid) -> step(Pid).
+%% @doc Same as 'step/1'.
+s(Pid) ->
+    step(Pid).
 
+%% @doc Same as 'step/3'.
 s(P0, P1, P2) -> step(c:pid(P0, P1, P2)).
 
+%% @doc Do a 'Step' debug operation of a stopped process: &gt;P0.P1.P2&lt;.
 step(P0, P1, P2) -> step(c:pid(P0, P1, P2)).
 
+%% @doc Do a 'Step' debug operation of a stopped process: 'Pid'.
 step(Pid) when is_pid(Pid) ->
     int:step(Pid),
     code_list(Pid).
 
 
-n(Pid) -> next(Pid).
+%% @doc Same as 'next/1'.
+n(Pid) ->
+    next(Pid).
 
-n(P0, P1, P2) -> next(c:pid(P0, P1, P2)).
+%% @doc Same as 'next/3'.
+n(P0, P1, P2) ->
+    next(c:pid(P0, P1, P2)).
 
-next(P0, P1, P2) -> next(c:pid(P0, P1, P2)).
+%% @doc Do a 'Next' debug operation of a stopped process: &gt;P0.P1.P2&lt;.
+next(P0, P1, P2) ->
+    next(c:pid(P0, P1, P2)).
 
+%% @doc Do a 'Next' debug operation of a stopped process: 'Pid'.
 next(Pid) when is_pid(Pid) ->
     int:next(Pid),
     code_list(Pid).
 
 
-f(Pid) -> finish(Pid).
+%% @doc Finish execution of a debugged function in process: 'Pid'.
+f(Pid) ->
+    finish(Pid).
 
-f(P0, P1, P2) -> finish(c:pid(P0, P1, P2)).
+%% @doc Finish execution of a debugged function in process: &lt;P0.P1.P2&gt;.
+f(P0, P1, P2) ->
+    finish(c:pid(P0, P1, P2)).
 
-finish(P0, P1, P2) -> finish(c:pid(P0, P1, P2)).
-
+%% @doc Finish execution of a debugged function in process: 'Pid'.
 finish(Pid) when is_pid(Pid) ->
     int:finish(Pid),
     code_list(Pid).
+
+%% @doc Finish execution of a debugged function in process: &lt;P0.P1.P2&gt;.
+finish(P0, P1, P2) ->
+    finish(c:pid(P0, P1, P2)).
 
 
 code_list(Pid) ->
@@ -411,7 +638,13 @@ code_list(Pid) ->
 toggle(true)  -> false;
 toggle(false) -> true.
 
-%% Attach to the first found process sitting on a break point!
+%% @doc Attach to the first process found stopped on a break point.
+%%
+%% Attach to an interpreted process in order to manually control
+%% the further execution, inspect variables, etc. When called, you
+%% will enter a sort of mini-shell where you can issue a number of
+%% commands.
+%% @end
 a() ->
     Self = self(),
     case [Pid || {Pid, _Func, Status, _Info} <- int:snapshot(),
@@ -423,12 +656,19 @@ a() ->
             "No process found to be at a break point!"
     end.
 
-a(Pid) -> attach(Pid).
+%% @doc Attach to the given Pid.
+a(Pid) ->
+    attach(Pid).
 
-a(P0, P1, P2) -> attach(c:pid(P0, P1, P2)).
+%% @doc Attach to the given process: &lt;P0.P1.P2&gt; .
+a(P0, P1, P2) ->
+    attach(c:pid(P0, P1, P2)).
 
-attach(P0, P1, P2) -> attach(c:pid(P0, P1, P2)).
+%% @doc Attach to the given process: &lt;P0.P1.P2&gt; .
+attach(P0, P1, P2) ->
+    attach(c:pid(P0, P1, P2)).
 
+%% @doc Attach to the given Pid.
 attach(Pid) when is_pid(Pid) ->
     Self = self(),
     case int:attached(Pid) of
@@ -445,6 +685,7 @@ attach(Pid) when is_pid(Pid) ->
     end.
 
 
+%% @private
 aloop(#s{meta   = Meta,
          prompt = Prompt} = S) ->
     receive
@@ -778,6 +1019,20 @@ print_all_breakpoints(L) ->
         end,
     [F(X) || X <- L].
 
+%% @doc Save all current break points.
+%%
+%% Identical to 'save_all_breakpoints/0'.
+%%
+%% @end
+sab() ->
+    save_all_breakpoints().
+
+%% @doc Save all current break points.
+%%
+%% Whenever a break point is set or modified, information is
+%% stored on disk in the file 'breakpoints.edbg' .
+%%
+%% @end
 save_all_breakpoints() ->
     L = int:all_breaks(),
     {ok,Fd} = file:open("breakpoints.edbg",[write]),
@@ -799,8 +1054,21 @@ save_all_breakpoints() ->
         file:close(Fd)
     end.
 
-lab() -> load_all_breakpoints().
+%% @doc Load (previously) stored break points.
+%%
+%% Identical to 'load_all_breakpoints/0'.
+%%
+%% @end
+lab() ->
+    load_all_breakpoints().
 
+%% @doc Load (previously) stored break points.
+%%
+%% Whenever a break point is set or modified, information is
+%% stored on disk in the file 'breakpoints.edbg' . This function
+%% will load and set those breakpoints found in this file.
+%%
+%% @end
 load_all_breakpoints() ->
     {ok,L} = file:consult("breakpoints.edbg"),
     F = fun({{Mod,Line},{Status,Trigger,_X,Cond}})->
@@ -841,6 +1109,7 @@ prompt(Pid, Apid) when is_pid(Pid), is_pid(Apid) ->
     Prompt = "("++pid_to_list(Pid)++")> ",
     ploop(Apid, Prompt, _PrevCmd = []).
 
+%% @private
 ploop(Apid, Prompt, PrevCmd) ->
     %% Empty prompt repeats previous command
     Cmd = case string:tokens(io:get_line(Prompt), "\n") of
@@ -967,6 +1236,14 @@ send_list_module(Apid, X) ->
 
 
 
+%% @doc Show all interpreted processes.
+%%
+%% Show all interpreted processes and what state there are in.
+%% In particular this is useful to see if a process has stopped
+%% at a break point. The process identifier ('Pid') displayed in the
+%% leftmost column can be used with the 'attach/1' function.
+%%
+%% @end
 plist() ->
     Self = self(),
     L = [X || X = {Pid, _Func, _Status, _Info} <- int:snapshot(),
@@ -1011,20 +1288,42 @@ q(M,F,A) ->
 q(A) when is_atom(A) -> atom_to_list(A);
 q(I) when is_integer(I) -> integer_to_list(I).
 
-mlist(Mod) when is_atom(Mod) ->
-    mod_list(Mod, {1,-1,-1});
+%% @doc List the source code, centered around a break point.
 %%
+%% The 'mlist/1' can also take a Module as an argument to
+%% list the source ode starting from Row 1.
+%% @end
 mlist(Pid) when is_pid(Pid) ->
     case get_break_point(Pid) of
         {_Pid, {_Mod,_Name,_Args}, break, {Mod,Line}} ->
             mlist(Mod, Line);
         Else ->
             Else
-    end.
+    end;
+mlist(Mod) when is_atom(Mod) ->
+    mod_list(Mod, {1,-1,-1}).
 
+
+
+%% @doc List the source code of a 'Module' centered around 'Row'.
 mlist(Mod, Row) when is_atom(Mod) ->
     mod_list(Mod, {1,Row,5}).
 
+%% @doc List the source code of a Module.
+%%
+%% List the source code of a 'Module', either centered around a triggered
+%% break point, or around a given 'Line'. The amount of lines being display
+%% around the line is controlled by the 'Contexft' value, which per default
+%% is set to '5' (i.e display 5 lines above and below the line).
+%%
+%% Note that the listing will display the line numbers at the left border
+%% of the output where breakpoints are high lighted by a '*' character
+%% and the given line as '>'. However, if no line is given, the '>'
+%% character will be used to denote where we currently are stopped.
+%%
+%% The 'mlist/3' can also take a sequence of integers for supplying a 'Pid'
+%% when we should center around a break point.
+%% @end
 mlist(Mod, Row, Ctx) when is_atom(Mod) ->
     mod_list(Mod, {1,Row,Ctx});
 mlist(P0, P1, P2) when P0 >= 0, P1 >= 0, P2 >= 0 ->
@@ -1077,7 +1376,7 @@ sep(Row) ->
             end
     end.
 
-
+%% @private
 find_source(Mod) ->
     [Fname] = [Z || {source,Z} <-
                         hd([X || {compile,X} <-

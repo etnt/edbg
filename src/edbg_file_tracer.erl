@@ -114,76 +114,98 @@
 %%%
 %%% --------------------------------------------------------------------
 
+%% @private
 start() ->
     gen_server:start({local, ?SERVER}, ?MODULE, [], []).
 
+%% @private
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
+%% @private
 stop() ->
     gen_server:stop(?SERVER).
 
+%% @private
 start_trace() ->
     call(start_trace).
 
+%% @private
 stop_trace() ->
     call(stop_trace).
 
+%% @private
 get_config() ->
     call(get_config).
 
+%% @private
 load_config() ->
     call(load_config).
 
+%% @private
 set_config(Funs, State)
   when is_list(Funs) andalso
        is_record(State, state) ->
     NewState = lists:foldl(fun(F,S) -> F(S) end, State, Funs),
     call({set_config, NewState}).
 
+%% @private
 get_trace_spec() ->
     call(get_trace_spec).
 
+%% @private
 log_file_f(LogFile)
   when is_list(LogFile) ->
     fun(State) -> State#state{log_file = LogFile} end.
 
+%% @private
 dump_output_lazy_f() ->
     fun(State) -> State#state{dump_output = false} end.
 
+%% @private
 dump_output_eager_f() ->
     fun(State) -> State#state{dump_output = true} end.
 
+%% @private
 monotonic_ts_f() ->
     fun(State) -> State#state{monotonic_ts = true} end.
 
+%% @private
 send_receive_f() ->
     fun(State) -> State#state{send_receive = true} end.
 
+%% @private
 memory_f() ->
     fun(State) -> State#state{memory = true} end.
 
+%% @private
 max_msgs_f(Max)
   when is_integer(Max) andalso Max >= 0 ->
     fun(State) -> State#state{max_msgs = Max} end.
 
+%% @private
 trace_time_f(Time)
   when is_integer(Time) andalso Time >= 0 ->
     fun(State) -> State#state{trace_time = Time} end.
 
+%% @private
 trace_spec_f(Spec)
   when is_atom(Spec) orelse is_pid(Spec) ->
     fun(State) -> State#state{trace_spec = Spec} end.
 
+%% @private
 add_mf_f(M)
   when is_record(M, m) ->
     fun(#state{modules = Ms} = State) -> State#state{modules = [M|Ms]} end.
 
+%% @private
 new_mf() -> #m{}.
 
+%% @private
 mname(M, Mname) when is_record(M, m) ->
     M#m{mname = l2a(Mname)}.
 
+%% @private
 fname(M, Fname)
   when is_record(M, m) ->
     M#m{fname = l2a(Fname)}.
@@ -196,6 +218,7 @@ call(Msg) ->
 %%%===================================================================
 
 %%--------------------------------------------------------------------
+%% @private
 init([]) ->
     process_flag(trap_exit, true),
     {ok, setup_init_state()}.
@@ -242,6 +265,7 @@ consult_file(Fname) ->
 %% handle_call(ping, _From, State) ->
 %%     Reply = pong,
 %%     {reply, Reply, State};
+%% @private
 handle_call(get_config, _From, State) ->
     Reply = State,
     {reply, Reply, State};
@@ -290,11 +314,13 @@ handle_call(_Req, _From, State) ->
 
 %%--------------------------------------------------------------------
 
+%% @private
 handle_cast(_Msg, State) ->
     ?log("Got unexpected cast: ~p", [_Msg]),
     {noreply, State}.
 
 %%--------------------------------------------------------------------
+%% @private
 handle_info({'EXIT', Tracer, _Reason}, #state{tracer = Tracer} = State) ->
     ?log("Tracer exited, reason: ~p", [_Reason]),
     {noreply, State#state{tracer = undefined}};
@@ -304,11 +330,13 @@ handle_info(_Info, State) ->
     {noreply, State}.
 
 %%--------------------------------------------------------------------
+%% @private
 terminate(_Reason, _State) ->
     ?log("Server stopped - ~p", [_Reason]),
     ok.
 
 %%--------------------------------------------------------------------
+%% @private
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
@@ -450,6 +478,7 @@ tmsgs(_State, [], N, Tmsgs) ->
     {N, Tmsgs}.
 
 
+%% @private
 log(Format, Args) ->
     io:format(Format, Args).
 

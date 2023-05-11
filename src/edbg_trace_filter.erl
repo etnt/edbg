@@ -37,6 +37,7 @@ new_tstate(Mod, Mods, Opts) when is_atom(Mod) andalso
 
 
 %% Executed in the context of the edbg_tracer process.
+%% @private
 start_tracer({Mod, Mods, Opts}) ->
     F = tracer_fun(self()),
     case dbg:tracer(process, {F, new_tstate(Mod, Mods, Opts)}) of

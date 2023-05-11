@@ -65,3 +65,7 @@ pp_record-dep:
 
 rm-deps:
 	rm -rf deps rebar3
+
+-PHONY: docs
+docs:
+	rebar3 ex_doc
