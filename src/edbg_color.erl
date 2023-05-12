@@ -1,4 +1,4 @@
-%%% @doc false
+%%% @private
 %%% @hidden
 %%% @end
 

@@ -1,3 +1,4 @@
+%%% @private
 %%
 %% Custom colors may be set using the environment variable EDBG_COLOR.
 %%
