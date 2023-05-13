@@ -1,0 +1,7 @@
+case os:getenv("MIX_ENV") of
+    false -> CONFIG;
+    _ ->
+        {erl_opts, Opts} = lists:keyfind(erl_opts, 1, CONFIG),
+        NewOpts = [{d,'ELIXIR'}|Opts],
+        lists:keyreplace(erl_opts, 1, CONFIG, {erl_opts, NewOpts})
+end.

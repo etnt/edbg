@@ -27,6 +27,7 @@
 
 %% API
 -export([add_mf_f/1
+         , cfg_file_f/1
          , dump_output_eager_f/0
          , dump_output_lazy_f/0
          , fname/2
@@ -81,6 +82,7 @@
 
 -record(state, {
           log_file = "./edbg.trace_result",
+          cfg_file = "./ftrace.edbg",
           max_msgs = ?DEFAULT_MAX_MSGS,
           trace_time = ?DEFAULT_TRACE_TIME,
           trace_spec = all,
@@ -160,6 +162,11 @@ log_file_f(LogFile)
     fun(State) -> State#state{log_file = LogFile} end.
 
 %% @private
+cfg_file_f(CfgFile)
+  when is_list(CfgFile) ->
+    fun(State) -> State#state{cfg_file = CfgFile} end.
+
+%% @private
 dump_output_lazy_f() ->
     fun(State) -> State#state{dump_output = false} end.
 
@@ -233,6 +240,8 @@ setup_init_state() ->
         L = consult_file(Fname),
         F = fun({log_file, LogFile}, S) when is_list(LogFile)  ->
                     S#state{log_file = LogFile};
+               ({cfg_file, CfgFile}, S) when is_list(CfgFile)  ->
+                    S#state{cfg_file = CfgFile};
                ({max_msgs, MaxMsgs}, S) when is_integer(MaxMsgs) ->
                     S#state{max_msgs = MaxMsgs};
                ({trace_time, TraceTime}, S) when is_integer(TraceTime) ->

@@ -209,6 +209,7 @@
 
 -import(edbg_file_tracer,
         [add_mf_f/1
+         , cfg_file_f/1
          , dump_output_eager_f/0
          , dump_output_lazy_f/0
          , fname/2
@@ -300,6 +301,8 @@ fhelp() ->
     "\n"
     "{log_file, FileName}     : file where to store trace output\n"
     "                           default is: edbg.trace_result\n"
+    "{cfg_file, FileName}     : file where to store config\n"
+    "                           default is: ftrace.edbg\n"
     "{max_msgs, MaxNumOfMsgs} : max number of trace messages\n"
     "                           default = 1000\n"
     "{trace_time, Seconds}    : max time to trace\n"
@@ -385,6 +388,8 @@ fstart(ModFunList, Options)
 
     Opts = lists:foldr(fun({log_file, Lname}, Acc) ->
                                [log_file_f(Lname)|Acc];
+                          ({cfg_file, Lname}, Acc) ->
+                               [cfg_file_f(Lname)|Acc];
                           ({max_msgs, Max}, Acc) ->
                                [max_msgs_f(Max)|Acc];
                           ({trace_time, Time}, Acc) ->
