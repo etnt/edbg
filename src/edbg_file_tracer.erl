@@ -69,8 +69,6 @@
 %%-define(log(Fmt,Args), log("~p: "++Fmt,[?MODULE|Args])).
 -define(log(Fmt,Args), ok).
 
--define(cfg_file, "ftrace.edbg").
-
 -define(DEFAULT_MAX_MSGS, 1000).
 -define(DEFAULT_TRACE_TIME, 10). % seconds
 
@@ -281,12 +279,12 @@ handle_call(get_config, _From, State) ->
     {reply, Reply, State};
 
 handle_call({set_config, State}, _From, _State) ->
-    save_config(State, ?cfg_file),
+    save_config(State, State#state.cfg_file),
     Reply = ok,
     {reply, Reply, State};
 
-handle_call(load_config, _From, _State) ->
-    State = get_file_config(?cfg_file),
+handle_call(load_config, _From, OldState) ->
+    State = get_file_config(OldState#state.cfg_file),
     Reply = ok,
     {reply, Reply, State};
 
