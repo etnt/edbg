@@ -71,6 +71,11 @@ If you don't fancy rebar and favour plain Make + Erlc then:
      to your ~/.erlang file.
 ```
 
+A Hex package exist so to use as an Elixir Mix dependency,
+add this to your list of deps:
+
+   {:edbg, "~> 0.9.5"}
+
 NOTE: The coloring code makes use of 'maps', so in case of an
 older Erlang system where 'maps' isn't supported, you must compile
 the code as:
