@@ -80,7 +80,7 @@
 
 -record(state, {
           log_file = "./edbg.trace_result",
-          cfg_file = "./ftrace.edbg",
+          cfg_file = "./edbg_trace.config",
           max_msgs = ?DEFAULT_MAX_MSGS,
           trace_time = ?DEFAULT_TRACE_TIME,
           trace_spec = all,
@@ -161,7 +161,7 @@ log_file_f(LogFile)
 
 %% @private
 cfg_file_f(CfgFile)
-  when is_list(CfgFile) ->
+  when is_list(CfgFile) orelse (CfgFile == false) ->
     fun(State) -> State#state{cfg_file = CfgFile} end.
 
 %% @private
@@ -354,6 +354,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+save_config(_X, false) ->
+    ok;
 save_config(X, CfgFile) ->
     {ok,Fd} = file:open(CfgFile, [write]),
     try
@@ -362,6 +364,8 @@ save_config(X, CfgFile) ->
         file:close(Fd)
     end.
 
+get_file_config(false) ->
+    #state{cfg_file = false};
 get_file_config(CfgFile) ->
     try
         {ok,[X]} = file:consult(CfgFile),

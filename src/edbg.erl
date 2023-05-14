@@ -199,7 +199,7 @@ fstart(ModFunList) ->
 %%
 %% <ul>
 %%   <li>{log_file, FileName} : file where to store trace output; default: 'edbg.trace_result'</li>
-%%   <li>{cfg_file, FileName} : file where to store the config; default: 'ftrace.edbg'</li>
+%%   <li>{cfg_file, FileName} : file where to store the config; default: 'edbg_trace.config'</li>
 %%   <li>{max_msgs, MaxNumOfMsgs} : max number of trace messages; default = 1000</li>
 %%   <li>{trace_time, Seconds} : max time to trace; default = 10 seconds</li>
 %%   <li>{trace_spec, Spec} : see the erlang:trace/3 docs; default = all</li>
@@ -220,6 +220,13 @@ fstart(ModFunList) ->
 %% generated trace messages and the maximum time we allow tracing to go on.
 %% 'edbg' helps you with this but you can still brake
 %% your system if you are careless setting the trace parameters.
+%%
+%% With the `log_file` you can override the default name of the file
+%% where the trace output should be stored. This can be necessary if
+%% you want to specify a certain location (e.g a r/w directory/file of
+%% an Elixir/Nerves device). For the same reason you can specify what
+%% file the 'cfg_file' should point to, or simply turn off the config
+%% file completely by setting it to `false'.
 %%
 %% With the `max_msgs' and `trace_time' parameters you can
 %% restrict the amount of generated trace messages and running time
