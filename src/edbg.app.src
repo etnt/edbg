@@ -1,6 +1,6 @@
 {application, edbg,
  [{description, "TTY interface to the Erlang debugger and tracer"},
-  {vsn, "0.9.2"},
+  {vsn, "0.9.3"},
   {registered, []},
   {applications,
    [kernel,

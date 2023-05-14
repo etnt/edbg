@@ -34,7 +34,7 @@
 %%%  (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom
 %%%  (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>
 %%%  (pr)etty print record <N> <ArgN>
-%%%  (f)ind <RegExp> [<ArgN> <ArgRegExp>] | ~r<RegExp>
+%%%  (f)ind <RegExp> [<ArgN> <ArgRegExp>]  (fr) <RetRegExp>
 %%%  (on)/(off) send_receive | memory
 %%%  (p)agesize <N> (q)uit
 %%%  (set) <Var> <N> [<ArgN>]  (let) <Var> <Expr>
@@ -161,11 +161,10 @@
 %%%   [{packet,httph},{packet_size,16384}]
 %%% '''
 %%%
-%%% To search among the return values we prefix our search
-%%% string with a `~r' sigil:
+%%% To search among the return values we use the 'fr' command:
 %%%
 %%% ```
-%%%   tlist> f ~rGET
+%%%   tlist> fr GET
 %%%   184:           <0.537.0> yaws:make_allow_header/1
 %%%   187:          <0.537.0> yaws_server:deliver_accumulated/1
 %%%   188:           <0.537.0> yaws:outh_get_content_encoding/0
@@ -471,26 +470,27 @@ prompt(Pid) when is_pid(Pid) ->
 %% @private
 rloop(Pid, Prompt) ->
     case string:tokens(b2l(io:get_line(Prompt)), "\n") of
-        ["eval"++X] -> xeval(?mytracer, X);
+        ["eval"++X]  -> xeval(?mytracer, X);
         ["xnall"++X] -> xnall(?mytracer, X);
-        ["xall"++X] -> xall(?mytracer, X);
-        ["let"++X] -> xlet(?mytracer, X);
-        ["set"++X] -> xset(?mytracer, X);
-        ["off"++X]-> off(?mytracer, X);
-        ["on"++X]-> on(?mytracer, X);
-        ["pr"++X]-> show_record(?mytracer, X);
-        ["d"++_] -> ?mytracer ! down;
-        ["u"++_] -> ?mytracer ! up;
-        ["t"++_] -> ?mytracer ! top;
-        ["b"++_] -> ?mytracer ! bottom;
-        ["a"++X] -> at(?mytracer, X);
-        ["f"++X] -> find(?mytracer, X);
-        ["s"++X] -> show(?mytracer, X);
-        ["r"++X] -> show_return(?mytracer, X);
-        ["w"++X] -> show_raw(?mytracer, X);
-        ["p"++X] -> set_page(?mytracer, X);
-        ["h"++_] -> print_help();
-        ["q"++_] ->
+        ["xall"++X]  -> xall(?mytracer, X);
+        ["let"++X]   -> xlet(?mytracer, X);
+        ["set"++X]   -> xset(?mytracer, X);
+        ["off"++X]   -> off(?mytracer, X);
+        ["on"++X]    -> on(?mytracer, X);
+        ["pr"++X]    -> show_record(?mytracer, X);
+        ["fr"++X]    -> find_retv(?mytracer, X);
+        ["f"++X]     -> find(?mytracer, X);
+        ["d"++_]     -> ?mytracer ! down;
+        ["u"++_]     -> ?mytracer ! up;
+        ["t"++_]     -> ?mytracer ! top;
+        ["b"++_]     -> ?mytracer ! bottom;
+        ["a"++X]     -> at(?mytracer, X);
+        ["s"++X]     -> show(?mytracer, X);
+        ["r"++X]     -> show_return(?mytracer, X);
+        ["w"++X]     -> show_raw(?mytracer, X);
+        ["p"++X]     -> set_page(?mytracer, X);
+        ["h"++_]     -> print_help();
+        ["q"++_]     ->
             ?mytracer ! quit,
             Pid ! quit,
             exit(normal);
@@ -506,21 +506,20 @@ b2l(L) when is_list(L) ->
     L.
 
 
+%% Find a match among the return values
+find_retv(Pid, X) ->
+    Xstr = string:strip(X),
+    Pid ! {find, {ret, Xstr}}.
+
+%% Search by Regexp
 find(Pid, X) ->
     try
-        case string:strip(X) of
-            "~r"++Xstr ->
-                %% Find a match among the return values
-                Pid ! {find, {ret, Xstr}};
-            Xstr ->
-                %% Search by Regexp
-                {Str,Args} = find_args(Xstr),
-                Pid ! {find, {rexp, Str, Args}}
-        end
+        Xstr = string:strip(X),
+        {Str,Args} = find_args(Xstr),
+        Pid ! {find, {rexp, Str, Args}}
     catch
         _:_ -> false
     end.
-
 
 
 find_args(AStr) ->
@@ -710,7 +709,7 @@ print_help() ->
     S1 = " (h)elp (a)t [<N>] (d)own (u)p (t)op (b)ottom",
     S2 = " (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>",
     S3 = " (pr)etty print record <N> <ArgN>",
-    S4 = " (f)ind <RegExp> [<ArgN> <ArgRegExp>] | ~r<RegExp>",
+    S4 = " (f)ind <RegExp> [<ArgN> <ArgRegExp>]  (fr) <RetRegExp>",
     S5 = " (on)/(off) send_receive | memory",
     S6 = " (p)agesize <N> (q)uit",
     S7 = " (set) <Var> <N> [<ArgN>]  (let) <Var> <Expr>",
