@@ -372,7 +372,8 @@ get_file_config(CfgFile) ->
         X
     catch
         _:_ ->
-            #state{}
+            ?info_msg("~nNo config file loaded!~n",[]),
+            #state{cfg_file = false}
     end.
 
 

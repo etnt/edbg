@@ -364,7 +364,7 @@ file(Fname, IsElixir) ->
 %% @private
 fstart() ->
     edbg_file_tracer:start(),
-    edbg_file_tracer:load_config(), % FIXME won't work on Nerves...
+    edbg_file_tracer:load_config(),
     start_trace().
 
 %% @private

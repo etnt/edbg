@@ -730,7 +730,10 @@ get_initial_call(Pid) when is_pid(Pid) ->
             end;
         _ ->
             false
-    end.
+    end;
+get_initial_call(_) ->
+    false.
+
 
 
 new_sup_tree(SupervisorId) ->
