@@ -1,6 +1,6 @@
 {application, edbg,
  [{description, "TTY interface to the Erlang debugger and tracer"},
-  {vsn, "0.9.3"},
+  {vsn, "0.9.4"},
   {registered, []},
   {applications,
    [kernel,
@@ -8,7 +8,6 @@
    ]},
   {env,[]},
   {modules, []},
-  {mod, {edbg_app, []}},
   {maintainers, []},
   {licenses, ["Apache"]},
   {links, [{"Github", "https://github.com/etnt/edbg"}]}
