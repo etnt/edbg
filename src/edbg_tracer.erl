@@ -620,8 +620,9 @@ xall(_Pid, X) ->
     end.
 
 recompile_as_export_all(Module) ->
-    Cs = Module:module_info(compile),
-    {source, SrcFname} = lists:keyfind(source, 1, Cs),
+    %%Cs = Module:module_info(compile),
+    %%{source, SrcFname} = lists:keyfind(source, 1, Cs),
+    SrcFname = edbg:find_source(Module),
     File = filename:rootname(SrcFname, ".erl"),
     {ok, Module, Code} = compile:file(File, [export_all,binary]),
     code:load_binary(Module, File, Code).
