@@ -1398,9 +1398,10 @@ sep(Row) ->
 
 %% @private
 find_source(Mod) ->
-    [Fname] = [Z || {source,Z} <-
-                        hd([X || {compile,X} <-
-                                     apply(Mod,module_info,[])])],
+    {ok, Fname} = filelib:find_source(code:which(Mod)),
+    %% [Fname] = [Z || {source,Z} <-
+    %%                     hd([X || {compile,X} <-
+    %%                                  apply(Mod,module_info,[])])],
     Fname.
 
 
