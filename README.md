@@ -1,7 +1,7 @@
 # E D B G
 
-[![hex.pm version](https://img.shields.io/hexpm/v/etacacs_plus.svg)](https://hex.pm/packages/etacacs_plus)
-[![Hex.pm Downloads](https://img.shields.io/hexpm/dt/etacacs_plus.svg?style=flat-square)](https://hex.pm/packages/etacacs_plus)
+[![hex.pm version](https://img.shields.io/hexpm/v/edbg.svg)](https://hex.pm/packages/edbg)
+[![Hex.pm Downloads](https://img.shields.io/hexpm/dt/edbg.svg?style=flat-square)](https://hex.pm/packages/edbg)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 > A tty based interface to the Erlang debugger/tracer and a supervisor tree browser.
