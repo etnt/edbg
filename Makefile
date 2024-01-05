@@ -1,5 +1,8 @@
 SHELL := /bin/bash
 
+ERLC_USE_SERVER ?= true
+export ERLC_USE_SERVER
+
 ERLC=erlc
 USE_COLORS ?= USE_COLORS
 ERLC_FLAGS= +debug_info +compressed -D$(USE_COLORS)
