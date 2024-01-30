@@ -222,6 +222,7 @@
          , new_mf/0
          , send_receive_f/0
          , set_config/2
+         , set_on_f/1
          , start_trace/0
          , stop_trace/0
          , trace_spec_f/1
@@ -406,6 +407,14 @@ fstart(ModFunList, Options)
                                [send_receive_f()|Acc];
                           (memory, Acc) ->
                                [memory_f()|Acc];
+                          (set_on_spawn = K, Acc) ->
+                               [set_on_f(K)|Acc];
+                          (set_on_first_spawn = K, Acc) ->
+                               [set_on_f(K)|Acc];
+                          (set_on_link = K, Acc) ->
+                               [set_on_f(K)|Acc];
+                          (set_on_first_link = K, Acc) ->
+                               [set_on_f(K)|Acc];
                           (X, Acc) ->
                                io:format("Ignoring Option: ~p~n",[X]),
                                Acc

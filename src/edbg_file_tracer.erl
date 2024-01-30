@@ -42,6 +42,7 @@
          , new_mf/0
          , send_receive_f/0
          , set_config/2
+         , set_on_f/1
          , start/0
          , start_link/0
          , start_trace/0
@@ -106,7 +107,10 @@
           send_receive = false,
 
           %% trace memory via the process_info/2 BIF.
-          memory = false
+          memory = false,
+
+          %% Any of: [set_on_spawn, set_on_first_spawn, set_on_link, set_on_first_link],
+          set_on = []
 
          }).
 
@@ -185,6 +189,13 @@ memory_f() ->
     fun(State) -> State#state{memory = true} end.
 
 %% @private
+set_on_f(Key) ->
+      fun(State) ->
+              L = State#state.set_on,
+              State#state{set_on = [Key|L]}
+      end.
+
+%% @private
 max_msgs_f(Max)
   when is_integer(Max) andalso Max >= 0 ->
     fun(State) -> State#state{max_msgs = Max} end.
@@ -250,6 +261,8 @@ setup_init_state() ->
                     S#state{send_receive = SendRec};
                ({memory, Memory}, S) when ?is_bool(Memory) ->
                     S#state{memory = Memory};
+               ({set_on, SetOn}, S) when is_list(SetOn) ->
+                    S#state{set_on = SetOn};
                (Opt, S) ->
                     ?err_msg("~nIgnoring unknown default option: ~p~n",[Opt]),
                     S
@@ -399,6 +412,7 @@ run_tracer(#state{modules = Modules, trace_spec = TraceSpec} = State) ->
     erlang:trace(TraceSpec,true,
                  [call,procs,{tracer,self()}] ++
                      monotonic_ts(State) ++
+		     set_on(State) ++
                      send_receive(State)),
     tloop(State, 0, []).
 
@@ -428,6 +442,7 @@ tloop(#state{srv_pid    = SrvPid,
             erlang:trace(TraceSpec,false,
                          [call,procs,{tracer,self()}] ++
                              monotonic_ts(State) ++
+			     set_on(State) ++
                              send_receive(State)),
             dump_tmsgs(State#state{dump_output = true,
                                    known_pids  = KnownPids}, NewTmsgs),
@@ -438,6 +453,7 @@ tloop(#state{srv_pid    = SrvPid,
             erlang:trace(TraceSpec,false,
                          [call,procs,{tracer,self()}] ++
                              monotonic_ts(State) ++
+                             set_on(State) ++
                              send_receive(State)),
             dump_tmsgs(State#state{dump_output = true,
                                    known_pids  = KnownPids}, Tmsgs),
@@ -454,6 +470,19 @@ monotonic_ts(_State)                      -> [].
 
 send_receive(#state{send_receive = true}) -> [send,'receive'];
 send_receive(_State)                      -> [].
+
+
+set_on(#state{set_on = SetOn}) ->
+    Allowed = [set_on_spawn, set_on_first_spawn,
+               set_on_link, set_on_first_link],
+    lists:foldl(
+      fun(X,Acc) ->
+              case lists:member(X,Allowed) of
+                  true  -> [X|Acc];
+                  false -> Acc
+              end
+      end, [], SetOn).
+
 
 dump_tmsgs(#state{dump_output = false}, _Tmsgs) ->
     ok;
