@@ -208,6 +208,10 @@ fstart(ModFunList) ->
 %%   <li>monotonic_ts : show the elapsed monotonic nano seconds</li>
 %%   <li>send_receive : trace send/receive messages from 'known' pids</li>
 %%   <li>memory : track the memory usage of the 'known' pids</li>
+%%   <li>set_on_spawn : any process created by a traced process inherit its trace flags</li>
+%%   <li>set_on_first_spawn : the first process created by a traced process inherit its trace flags</li>
+%%   <li>set_on_link : any process linked by a traced process inherit its trace flags</li>
+%%   <li>set_on_first_link : the first process linked by a traced process inherit its trace flags</li>
 %% </ul>
 %%
 %% Tracing in an Erlang node is setup by the 'erlang:trace/3' and
@@ -271,6 +275,9 @@ fstart(ModFunList) ->
 %% not exactly represent the state of the process at the creation of the
 %% trace message.
 %%
+%% The `set_on_XXX' options probably works best together with the {@link fpid/2}
+%% function.
+%%
 %%
 %%```
 %%    % Example, trace calls to the foo module, no more than 1000 trace msgs
@@ -314,7 +321,10 @@ fpid(Pid) when is_pid(Pid) ->
 %% @doc Start tracing the process: 'Pid'.
 %%
 %% Start tracing the process. The Options are the same as
-%% for the 'fstart/2' function-
+%% for the 'fstart/2' function.
+%%
+%% NOTE: The `set_on_XXXX' options can be very useful here.
+%% See also {@link fstart/2}
 %%
 %% @end
 fpid(Pid, Options) when is_pid(Pid) andalso is_list(Options) ->
