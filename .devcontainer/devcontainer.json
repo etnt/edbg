@@ -7,7 +7,7 @@
 		"dockerfile": "Dockerfile",
 		// Update 'VARIANT' to pick a Debian variant: buster, bullseye, or sid
 		"args": { "VARIANT": "testing" }
-	},
+	}
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},
