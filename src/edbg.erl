@@ -1408,12 +1408,21 @@ sep(Row) ->
 
 %% @private
 find_source(Mod) ->
-    {ok, Fname} = filelib:find_source(code:which(Mod)),
+    case filelib:find_source(code:which(Mod)) of
+        {ok, Fname} ->
+            Fname;
+        {error, _} ->
+            find_source_from_modinfo(Mod)
+    end.
     %% [Fname] = [Z || {source,Z} <-
     %%                     hd([X || {compile,X} <-
     %%                                  apply(Mod,module_info,[])])],
-    Fname.
 
+%% @private
+find_source_from_modinfo(Mod) ->
+    Cs = Mod:module_info(compile),
+    {source, Fname} = lists:keyfind(source, 1, Cs),
+    Fname.
 
 i2l(I) when is_integer(I) -> integer_to_list(I).
 b2l(B) when is_binary(B)  -> binary_to_list(B).
