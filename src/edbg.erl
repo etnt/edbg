@@ -84,6 +84,8 @@
          n/3,
          next/1,
          next/3,
+         rmi/0,
+         rmi/1,
          sab/0,
          save_all_breakpoints/0,
          s/1,
@@ -621,6 +623,16 @@ next(Pid) when is_pid(Pid) ->
     int:next(Pid),
     code_list(Pid).
 
+%% @doc Remove all interpreted modules.
+rmi() ->
+    lists:foreach(fun remove_interpreted_module/1, id()).
+
+%% @doc Remove a specific interpreted modules.
+rmi(Mod) ->
+    remove_interpreted_module(Mod).
+
+remove_interpreted_module(Mod) ->
+    dbg_iserver:safe_cast({delete, Mod}).
 
 %% @doc Finish execution of a debugged function in process: 'Pid'.
 f(Pid) ->
