@@ -631,8 +631,11 @@ rmi() ->
 rmi(Mod) ->
     remove_interpreted_module(Mod).
 
+%% @doc Doesn't support distributed mode. See int:del_mod/2 for more.
 remove_interpreted_module(Mod) ->
-    dbg_iserver:safe_cast({delete, Mod}).
+    dbg_iserver:safe_cast({delete, Mod}),
+    erts_debug:breakpoint({Mod,'_','_'}, false),
+    erlang:yield().
 
 %% @doc Finish execution of a debugged function in process: 'Pid'.
 f(Pid) ->
