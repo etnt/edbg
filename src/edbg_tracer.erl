@@ -751,7 +751,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
         %% Max is reached; stop tracing!
         {trace, From , {N,_Trace} = _Msg} when N > MaxTrace ->
             reply(From, stop),
-            dbg:stop_clear(),
+            dbg:stop(),
             ?MODULE:tloop(X#t{tracer = undefined}, Tlist ,Buf);
 
 
@@ -768,7 +768,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist#tlist{page = Page} ,Buf);
 
         {show_raw, N} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             case lists:keyfind(N, 1, Buf) of
                 {_, Msg} ->
                     ?info_msg("~n~p~n", [Msg]);
@@ -778,7 +778,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist ,Buf);
 
         {show_return, N} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             case get_return_value(N, lists:reverse(Buf)) of
                 {ok, {M,F,Alen}, RetVal} ->
                     Sep = pad(35, $-),
@@ -790,12 +790,12 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist ,Buf);
 
         {show, N} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             mlist(N, Buf),
             ?MODULE:tloop(X, Tlist ,Buf);
 
         {show, N, ArgN} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             try
                 case lists:keyfind(N, 1, Buf) of
                     {_, ?CALL(_Pid, MFA, _As)} ->
@@ -813,7 +813,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist ,Buf);
 
         {show_record, N, ArgN} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             try
                 case lists:keyfind(N, 1, Buf) of
                     {_, ?CALL(_Pid, MFA, _As)} ->
@@ -833,7 +833,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
 
         %% Set Variable to the specified Return-Value
         {xset, Var, N} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             NewTlist =
                 try
                     case get_return_value(N, lists:reverse(Buf)) of
@@ -853,7 +853,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
 
         %% Set Variable to the specified Argument-Value
         {xset, Var, N, ArgN} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             NewTlist =
                 try
                     case lists:keyfind(N, 1, Buf) of
@@ -878,7 +878,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
 
         %% Set Variable to the specified record field of Argument-Value
         {xset, Var, N, ArgN, RecordStr, FieldStr} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             Record = list_to_atom(RecordStr),
             Field = list_to_atom(FieldStr),
             NewTlist =
@@ -906,7 +906,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, NewTlist ,Buf);
 
         {xlet, Var, ExprStr} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             NewTlist =
                 try
                     {ok, Tokens, _} = erl_scan:string(ExprStr),
@@ -922,7 +922,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, NewTlist ,Buf);
 
         {xeval, ExprStr} ->
-            dbg:stop_clear(),
+            dbg:stop(),
             try
                 {ok, Tokens, _} = erl_scan:string(ExprStr),
                 {ok, Exprs} = erl_parse:parse_exprs(Tokens),
@@ -983,7 +983,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, NewTlist, Buf);
 
         down ->
-            dbg:stop_clear(),
+            dbg:stop(),
             NewTlist = list_trace(Tlist, Buf),
             ?MODULE:tloop(X, NewTlist, Buf);
 
@@ -995,11 +995,11 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist ,Buf);
 
         stop ->
-            dbg:stop_clear(),
+            dbg:stop(),
             ?MODULE:tloop(X#t{tracer = undefined}, Tlist ,Buf);
 
         quit ->
-            dbg:stop_clear(),
+            dbg:stop(),
             exit(quit);
 
         {From, {load_trace_data, TraceData}} ->
