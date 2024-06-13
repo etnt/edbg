@@ -348,13 +348,15 @@ file(Fname, IsElixir) ->
     catch stop_trace(),
     catch edbg_file_tracer:stop(),
     try file:read_file(Fname) of
-        {ok, Tdata} ->
+        {ok, Tdata} when byte_size(Tdata) > 0 ->
             call(start_my_tracer(), {elixir, IsElixir}),
             %% We expect Tdata to be a list of trace tuples as
             %% a binary in the external term form.
             call(start_my_tracer(), {load_trace_data,
                                      binary_to_term(Tdata)}),
             tlist();
+        {ok, _Tdata} ->
+            {error, empty_trace_file};
         Error ->
             Error
     catch
