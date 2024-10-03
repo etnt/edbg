@@ -1448,6 +1448,7 @@ get_break_point(MyPid) ->
         [] ->
             pid_not_found;
 
+
         [{_Pid, {Mod,_Name,_Args}, break, {Mod,_Line}} = Bx] ->
             Bx;
 

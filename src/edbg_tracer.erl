@@ -264,9 +264,10 @@
          %% then this counter keeps track of how many lines
          %% we are currently displaying, making it possible
          %% to fill the 'page'.
-         vlines = 0
-        }).
+         vlines = 0,
 
+         follow_process = false  % false | <pid>
+         }).
 
 -record(t, {
           trace_max = 10000,
@@ -491,6 +492,8 @@ rloop(Pid, Prompt) ->
         ["on"++X]    -> on(?mytracer, X);
         ["pr"++X]    -> show_record(?mytracer, X);
         ["fr"++X]    -> find_retv(?mytracer, X);
+        ["fp"++_]    -> ?mytracer ! follow_process;
+        ["up"++_]    -> ?mytracer ! unfollow_process;
         ["f"++X]     -> find(?mytracer, X);
         ["d"++_]     -> ?mytracer ! down;
         ["u"++_]     -> ?mytracer ! up;
@@ -970,6 +973,16 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?info_msg("turning off display of memory usage~n",[]),
             ?MODULE:tloop(X, Tlist#tlist{memory = false}, Buf);
 
+        follow_process ->
+            At = Tlist#tlist.at,
+            CurrentPid = get_current_pid(At, Buf),
+            ?info_msg("following process: ~p~n",[CurrentPid]),
+            ?MODULE:tloop(X, Tlist#tlist{follow_process = CurrentPid}, Buf);
+
+        unfollow_process ->
+            ?info_msg("unfollowing process~n",[]),
+            ?MODULE:tloop(X, Tlist#tlist{follow_process = false}, Buf);
+
         at ->
             NewAt = erlang:max(0, Tlist#tlist.at - Tlist#tlist.page - 1),
             NewTlist = list_trace(Tlist#tlist{at = NewAt}, Buf),
@@ -1051,6 +1064,17 @@ do_find(Tlist, Buf, {rexp, Str, {An,Av}}) ->
             Tlist;
         NewAt ->
             list_trace(Tlist#tlist{at = NewAt}, Buf)
+    end.
+
+
+get_current_pid(At, Buf) ->
+    case lists:keyfind(At, 1, Buf) of
+        {_,{trace, Pid, _, _, _}} ->
+            Pid;
+        {_,{trace_ts, Pid, _, _, _, _}} ->
+            Pid;
+        _ ->
+            false
     end.
 
 
@@ -1232,9 +1256,12 @@ field_size([{N,_}|_]) ->
 field_size(_) ->
     "1". % shouldn't happen...
 
+-define(is_followed(Pid, FPid), (FPid == false orelse FPid == Pid)).
+
 list_trace(Tlist, Buf) ->
     maybe_put_first_timestamp(Buf),
     Fs = field_size(Buf),
+    FPid = Tlist#tlist.follow_process,
     Zlist =
         lists:foldr(
 
@@ -1245,7 +1272,7 @@ list_trace(Tlist, Buf) ->
                      at = At,
                      vlines = VL,
                      page = Page} = Z)
-                when ?inside_vl(At,N,VL,Page) ->
+                when ?inside_vl(At,N,VL,Page) andalso ?is_followed(Pid, FPid) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   MPid = mpid(MemoryP, Pid, As),
                   ?info_msg("~"++Fs++".s:~s ~s ~p:~p/~p~n",
@@ -1259,7 +1286,7 @@ list_trace(Tlist, Buf) ->
                      at = At,
                      vlines = VL,
                      page = Page} = Z)
-                when ?inside_vl(At,N,VL,Page) ->
+                when ?inside_vl(At,N,VL,Page) andalso ?is_followed(Pid, FPid) ->
                   Level = maps:get(Pid, LevelMap, 0),
                   MPid = mpid(MemoryP, Pid, As),
                   ?info_msg("~"++Fs++".s:~s ~s ~p:~p/~p - ~p~n",
@@ -1296,7 +1323,7 @@ list_trace(Tlist, Buf) ->
                      at = At,
                      vlines = VL,
                      page = Page} = Z)
-                when ?inside_vl(At,N,VL,Page) ->
+                when ?inside_vl(At,N,VL,Page) andalso ?is_followed(FromPid, FPid) ->
                   Level = maps:get(FromPid, LevelMap, 0),
                   ?info_msg("~"++Fs++".s:~s >>> Send(~p) -> To(~p)  ~s~n",
                             [integer_to_list(N),pad(Level),
@@ -1327,7 +1354,7 @@ list_trace(Tlist, Buf) ->
                      at = At,
                      vlines = VL,
                      page = Page} = Z)
-                when ?inside_vl(At,N,VL,Page) ->
+                when ?inside_vl(At,N,VL,Page) andalso ?is_followed(ToPid, FPid) ->
                   Level = maps:get(ToPid, LevelMap, 0),
                   ?info_msg("~"++Fs++".s:~s <<< Receive(~p)  ~s~n",
                             [integer_to_list(N),pad(Level),
@@ -1480,8 +1507,8 @@ mlist(N, Buf) ->
                 ?info_msg("not found~n",[])
         end
     catch
-        _:Err ->
-            ?info_msg(?c_err("CRASH: ~p~n"), [Err])
+        _:Err:STrace ->
+            ?info_msg(?c_err("CRASH: ~p") ++ " ~p~n", [Err,STrace])
     end.
 
 show_send_msg(SendPid, ToPid, Msg) ->
