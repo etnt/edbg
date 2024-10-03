@@ -726,12 +726,13 @@ print_help() ->
     S2 = " (s)how <N> [<ArgN>] (r)etval <N> ra(w) <N>",
     S3 = " (pr)etty print record <N> <ArgN>",
     S4 = " (f)ind <RegExp> [<ArgN> <ArgRegExp>]  (fr) <RetRegExp>",
-    S5 = " (on)/(off) send_receive | memory",
-    S6 = " (p)agesize <N> (q)uit",
-    S7 = " (set) <Var> <N> [<ArgN>]  (let) <Var> <Expr>",
-    S8 = " (eval) <Expr>  (xall/xnall) <Mod>",
-    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n",
-                      [S1,S2,S3,S4,S5,S6,S7,S8]),
+    S5 = " (fp) follow process | (up) unfollow process",
+    S6 = " (on)/(off) send_receive | memory",
+    S7 = " (p)agesize <N> (q)uit",
+    S8 = " (set) <Var> <N> [<ArgN>]  (let) <Var> <Expr>",
+    S9 = " (eval) <Expr>  (xall/xnall) <Mod>",
+    S = io_lib:format("~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n~s~n",
+                      [S1,S2,S3,S4,S5,S6,S7,S8,S9]),
     ?info_msg(?help_hi(S), []).
 
 
