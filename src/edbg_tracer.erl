@@ -975,7 +975,7 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, Tlist#tlist{memory = false}, Buf);
 
         follow_process ->
-            At = Tlist#tlist.at,
+            At = erlang:max(0, Tlist#tlist.at - Tlist#tlist.page - 1),
             CurrentPid = get_current_pid(At, Buf),
             ?info_msg("following process: ~p~n",[CurrentPid]),
             ?MODULE:tloop(X, Tlist#tlist{follow_process = CurrentPid}, Buf);
