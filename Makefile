@@ -26,7 +26,10 @@ CURL=$(shell which curl)
 .PHONY: all old test clean
 all: rebar3 compile
 old: old-get-deps $(BEAM_OBJS)
-test: $(TBEAM)
+test: $(TBEAM) unit
+
+unit:
+	erl -noshell  -s edbg_tracer test -s init stop
 
 %.beam: %.erl
 	$(ERLC) $(ERLC_FLAGS) -o ebin $<

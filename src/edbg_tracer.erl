@@ -234,10 +234,10 @@
          ploop/1,
          rloop/2
         ]).
-
+-export([mk_split_buffer/2, find_pid_before/2]).
 -include("edbg_trace.hrl").
 
-%%-define(TEST, true).
+-define(TEST, true).
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -570,6 +570,99 @@ find_args_test_() ->
                    find_args("abc\\ def")),
      ?_assertMatch({"abc def", {2,"rune"}},
                    find_args("abc\\ def 2 rune"))
+    ].
+
+-endif.
+
+
+find_pid_before(Pid, {BeforeList, AfterList} = _SplitBuffer) ->
+    {RevNewBefore, NewAfter} = find_pid_before_helper(Pid, lists:reverse(BeforeList), AfterList),
+    {lists:reverse(RevNewBefore), NewAfter}.
+
+find_pid_before_helper(_Pid, [], AfterList) ->
+    {[], AfterList};
+find_pid_before_helper(Pid, [{_N, {call, Pid, _MFA, _As}} = H | T], AfterList) ->
+    {T, [H|AfterList]};
+find_pid_before_helper(Pid, [H | T], AfterList) ->
+    find_pid_before_helper(Pid, T, [H | AfterList]).
+
+-ifdef(EUNIT).
+
+find_pid_before_test_() ->
+    Pid1 = 1, Pid2 = 2, Pid3 = 3, Pid4 = 4,
+
+    Buffer = [{1, {call, Pid1, mfa, as}}],
+
+    Buffer2 = [{1, {call, Pid1, mfa, as}},
+               {2, {call, Pid2, mfa, as}}],
+
+    Buffer3 = [{1, {call, Pid1, mfa, as}},
+               {2, {call, Pid2, mfa, as}},
+               {3, {call, Pid3, mfa, as}}],
+
+    Buffer4 = [{1, {call, Pid1, mfa, as}},
+               {2, {call, Pid2, mfa, as}},
+               {3, {call, Pid3, mfa, as}},
+               {4, {call, Pid4, mfa, as}}],
+
+    [?_assertMatch({[], [{1, {call, Pid1, mfa, as}}]},
+                   find_pid_before(Pid1, mk_split_buffer(1, Buffer))),
+
+     ?_assertMatch({[],
+                    [{1, {call, Pid1, mfa, as}},
+                     {2, {call, Pid2, mfa, as}}]},
+                   find_pid_before(Pid2, mk_split_buffer(2, Buffer2))),
+
+    ?_assertMatch({[],
+            [{1, {call, Pid1, mfa, as}},
+                    {2, {call, Pid2, mfa, as}}]},
+                   find_pid_before(Pid1, mk_split_buffer(2, Buffer2))),
+
+     ?_assertMatch({[{1, {call, Pid1, mfa, as}}],
+                    [{2, {call, Pid2, mfa, as}},
+                     {3, {call, Pid3, mfa, as}}]},
+                   find_pid_before(Pid2, mk_split_buffer(3, Buffer3))),
+
+     ?_assertMatch({[{1, {call, Pid1, mfa, as}}],
+                    [{2, {call, Pid2, mfa, as}},
+                     {3, {call, Pid3, mfa, as}},
+                     {4, {call, Pid4, mfa, as}}]},
+                   find_pid_before(Pid2, mk_split_buffer(4, Buffer4)))
+    ].
+
+-endif.
+
+
+
+mk_split_buffer(At, Buf) ->
+    lists:splitwith(fun({A, _}) -> A < At end, Buf).
+
+-ifdef(EUNIT).
+
+mk_split_buffer_test_() ->
+     Pid1 = 1, Pid2 = 2, Pid3 = 3,
+
+    _Buffer = [{1, {call, Pid1, mfa, as}}],
+
+    _Buffer2 = [{1, {call, Pid1, mfa, as}},
+               {2, {call, Pid2, mfa, as}}],
+
+    Buffer3 = [{1, {call, Pid1, mfa, as}},
+               {2, {call, Pid2, mfa, as}},
+               {3, {call, Pid3, mfa, as}}],
+
+    [?_assertMatch({[{1,a}],[{2,b},{3,c}]},
+                   mk_split_buffer(2, [{1,a},{2,b},{3,c}])),
+     ?_assertMatch({[{1,a},{2,b}],[{3,c},{4,d}]},
+                   mk_split_buffer(3, [{1,a},{2,b},{3,c},{4,d}])),
+     ?_assertMatch({[], [{1,a},{2,b}]},
+                   mk_split_buffer(1, [{1,a},{2,b}])),
+     ?_assertMatch({[{1,a},{2,b}],[]},
+                   mk_split_buffer(3, [{1,a},{2,b}])),
+     ?_assertMatch({[{1, {call, Pid1, mfa, as}}],
+                    [{2, {call, Pid2, mfa, as}},
+                     {3, {call, Pid3, mfa, as}}]},
+                   mk_split_buffer(2, Buffer3))
     ].
 
 -endif.
