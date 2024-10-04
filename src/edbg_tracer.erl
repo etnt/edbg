@@ -234,10 +234,10 @@
          ploop/1,
          rloop/2
         ]).
--export([mk_split_buffer/2, find_pid_before/2]).
+
 -include("edbg_trace.hrl").
 
--define(TEST, true).
+%%-define(TEST, true).
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 -endif.
@@ -581,7 +581,9 @@ find_pid_before(Pid, {BeforeList, AfterList} = _SplitBuffer) ->
 
 find_pid_before_helper(_Pid, [], AfterList) ->
     {[], AfterList};
-find_pid_before_helper(Pid, [{_N, {call, Pid, _MFA, _As}} = H | T], AfterList) ->
+find_pid_before_helper(Pid, [{_N, ?CALL(Pid, _MFA, _As)} = H | T], AfterList) ->
+    {T, [H|AfterList]};
+find_pid_before_helper(Pid, [{_N, ?CALL_TS(Pid, _MFA, _Ts, _As)} = H | T], AfterList) ->
     {T, [H|AfterList]};
 find_pid_before_helper(Pid, [H | T], AfterList) ->
     find_pid_before_helper(Pid, T, [H | AfterList]).
@@ -591,42 +593,42 @@ find_pid_before_helper(Pid, [H | T], AfterList) ->
 find_pid_before_test_() ->
     Pid1 = 1, Pid2 = 2, Pid3 = 3, Pid4 = 4,
 
-    Buffer = [{1, {call, Pid1, mfa, as}}],
+    Buffer = [{1, ?CALL(Pid1, mfa, as)}],
 
-    Buffer2 = [{1, {call, Pid1, mfa, as}},
-               {2, {call, Pid2, mfa, as}}],
+    Buffer2 = [{1, ?CALL(Pid1, mfa, as)},
+               {2, ?CALL(Pid2, mfa, as)}],
 
-    Buffer3 = [{1, {call, Pid1, mfa, as}},
-               {2, {call, Pid2, mfa, as}},
-               {3, {call, Pid3, mfa, as}}],
+    Buffer3 = [{1, ?CALL(Pid1, mfa, as)},
+               {2, ?CALL(Pid2, mfa, as)},
+               {3, ?CALL(Pid3, mfa, as)}],
 
-    Buffer4 = [{1, {call, Pid1, mfa, as}},
-               {2, {call, Pid2, mfa, as}},
-               {3, {call, Pid3, mfa, as}},
-               {4, {call, Pid4, mfa, as}}],
+    Buffer4 = [{1, ?CALL(Pid1, mfa, as)},
+               {2, ?CALL(Pid2, mfa, as)},
+               {3, ?CALL(Pid3, mfa, as)},
+               {4, ?CALL(Pid4, mfa, as)}],
 
-    [?_assertMatch({[], [{1, {call, Pid1, mfa, as}}]},
+    [?_assertMatch({[], [{1, ?CALL(Pid1, mfa, as)}]},
                    find_pid_before(Pid1, mk_split_buffer(1, Buffer))),
 
      ?_assertMatch({[],
-                    [{1, {call, Pid1, mfa, as}},
-                     {2, {call, Pid2, mfa, as}}]},
+                    [{1, ?CALL(Pid1, mfa, as)},
+                     {2, ?CALL(Pid2, mfa, as)}]},
                    find_pid_before(Pid2, mk_split_buffer(2, Buffer2))),
 
     ?_assertMatch({[],
-            [{1, {call, Pid1, mfa, as}},
-                    {2, {call, Pid2, mfa, as}}]},
+            [{1, ?CALL(Pid1, mfa, as)},
+                    {2, ?CALL(Pid2, mfa, as)}]},
                    find_pid_before(Pid1, mk_split_buffer(2, Buffer2))),
 
-     ?_assertMatch({[{1, {call, Pid1, mfa, as}}],
-                    [{2, {call, Pid2, mfa, as}},
-                     {3, {call, Pid3, mfa, as}}]},
+     ?_assertMatch({[{1, ?CALL(Pid1, mfa, as)}],
+                    [{2, ?CALL(Pid2, mfa, as)},
+                     {3, ?CALL(Pid3, mfa, as)}]},
                    find_pid_before(Pid2, mk_split_buffer(3, Buffer3))),
 
-     ?_assertMatch({[{1, {call, Pid1, mfa, as}}],
-                    [{2, {call, Pid2, mfa, as}},
-                     {3, {call, Pid3, mfa, as}},
-                     {4, {call, Pid4, mfa, as}}]},
+     ?_assertMatch({[{1, ?CALL(Pid1, mfa, as)}],
+                    [{2, ?CALL(Pid2, mfa, as)},
+                     {3, ?CALL(Pid3, mfa, as)},
+                     {4, ?CALL(Pid4, mfa, as)}]},
                    find_pid_before(Pid2, mk_split_buffer(4, Buffer4)))
     ].
 
@@ -1087,7 +1089,24 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
             ?MODULE:tloop(X, NewTlist, Buf);
 
         up ->
-            NewAt = erlang:max(0, Tlist#tlist.at - (2*Tlist#tlist.page)),
+            NewAt0 = erlang:max(0, Tlist#tlist.at - (2*Tlist#tlist.page)),
+	        NewAt = case Tlist#tlist.follow_process of
+                            FPid when is_pid(FPid) ->
+                            %% When following process!
+		                    try
+                                {_Before,[{N,_} | _After]} =
+		                            find_pid_before(FPid,
+				                          mk_split_buffer(NewAt0,
+						                                    lists:reverse(Buf))),
+			                    N
+                            catch
+		                        _:_ ->
+			                    NewAt0
+		                    end;
+		                _ ->
+			                NewAt0
+                    end,
+            io:format("up: NewAt0=~p , NewAt=~p~n",[NewAt0,NewAt]),
             NewTlist = list_trace(Tlist#tlist{at = NewAt}, Buf),
             ?MODULE:tloop(X, NewTlist, Buf);
 
