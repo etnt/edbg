@@ -17,15 +17,15 @@ print(Node, Xinfo) ->
     io:format("~p~n", [Node]),
     Visited = [Node],
     Children = get_children(Node, Visited),
-    print_children(Children, ["  |"], Visited, Xinfo).
+    {ok, 1 + print_children(Children, ["  |"], Visited, Xinfo)}.
 
 print_children([], _, _, _) ->
-    ok;
+    0;
 print_children([H], Indent, Visited, Xinfo) ->
     pretty_print(H, Indent, Visited, Xinfo, _IsLast = true);
 print_children([H | T], Indent, Visited, Xinfo) ->
-    pretty_print(H, Indent, Visited, Xinfo, _IsLast = false),
-    print_children(T, Indent, Visited, Xinfo).
+    N = pretty_print(H, Indent, Visited, Xinfo, _IsLast = false),
+    N + print_children(T, Indent, Visited, Xinfo).
 
 pretty_print(Node, RIndent, Visited, Xinfo, IsLast) ->
     Indent =
@@ -40,7 +40,7 @@ pretty_print(Node, RIndent, Visited, Xinfo, IsLast) ->
             true -> ["  |", "   " | tl(RIndent)];
             false -> ["  |" | RIndent]
         end,
-    print_children(Children, R, [Node | Visited], Xinfo).
+    1 + print_children(Children, R, [Node | Visited], Xinfo).
 
 get_children(Node, Visited) ->
     [
