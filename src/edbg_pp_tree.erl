@@ -15,38 +15,40 @@ print(Node) ->
 
 print(Node, Xinfo) ->
     io:format("~p~n", [Node]),
-    Visited = [Node],
-    Children = get_children(Node, Visited),
-    {ok, 1 + print_children(Children, ["  |"], Visited, Xinfo)}.
+    init_visited(),
+    push_visited(Node),
+    Children = get_children(Node),
+    {ok, 1 + print_children(Children, ["  |"], Xinfo)}.
 
-print_children([], _, _, _) ->
+print_children([], _, _) ->
     0;
-print_children([H], Indent, Visited, Xinfo) ->
-    pretty_print(H, Indent, Visited, Xinfo, _IsLast = true);
-print_children([H | T], Indent, Visited, Xinfo) ->
-    N = pretty_print(H, Indent, Visited, Xinfo, _IsLast = false),
-    N + print_children(T, Indent, Visited, Xinfo).
+print_children([H], Indent, Xinfo) ->
+    pretty_print(H, Indent, Xinfo, _IsLast = true);
+print_children([H | T], Indent, Xinfo) ->
+    N = pretty_print(H, Indent, Xinfo, _IsLast = false),
+    N + print_children(T, Indent, Xinfo).
 
-pretty_print(Node, RIndent, Visited, Xinfo, IsLast) ->
+pretty_print(Node, RIndent, Xinfo, IsLast) ->
     Indent =
         case IsLast of
             false -> lists:reverse(RIndent);
             true -> lists:reverse(["  +" | tl(RIndent)])
         end,
     io:format("~s--~p ~s~n", [Indent, Node, mk_xinfo(Node, Xinfo)]),
-    Children = get_children(Node, Visited),
+    Children = get_children(Node),
     R =
         case IsLast of
             true -> ["  |", "   " | tl(RIndent)];
             false -> ["  |" | RIndent]
         end,
-    1 + print_children(Children, R, [Node | Visited], Xinfo).
+    push_visited(Node),
+    1 + print_children(Children, R, Xinfo).
 
-get_children(Node, Visited) ->
+get_children(Node) ->
     [
         C
      || C <- children(Node),
-        false == lists:member(C, Visited)
+        false == is_visited(C)
     ].
 
 children(Node) when is_pid(Node) orelse is_port(Node) ->
@@ -79,3 +81,16 @@ mk_xinfo(Node, L) ->
         [],
         Pinfo
     ).
+
+
+init_visited() ->
+    erase(visited),
+    put(visited, sets:new()).
+
+push_visited(Node) ->
+    Visited = get(visited),
+    put(visited, sets:add_element(Node, Visited)).
+
+is_visited(Node) ->
+    Visited = get(visited),
+    sets:is_element(Node, Visited).
