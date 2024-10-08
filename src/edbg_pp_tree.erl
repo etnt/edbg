@@ -7,28 +7,40 @@
 
 -export([
     print/1,
-    print/2
+    print/2,
+    print/3
 ]).
+
+-define(init_maxdepth(MaxDepth), {0,MaxDepth}).
+%%-define(below_maxdepth(D), element(1, D) < element(2, D)).
+-define(above_maxdepth(D), element(1, D) > element(2, D)).
+-define(inc_depth(D), {element(1, D) + 1, element(2, D)}).
+
 
 print(Node) ->
     print(Node, []).
 
-print(Node, Xinfo) ->
+print(Node, Xinfo) when is_list(Xinfo) ->
+    print(Node, nodepth, Xinfo).
+
+print(Node, MaxDepth, Xinfo) when is_list(Xinfo) ->
     io:format("~p~n", [Node]),
     init_visited(),
     push_visited(Node),
     Children = get_children(Node),
-    {ok, 1 + print_children(Children, ["  |"], Xinfo)}.
+    {ok, 1 + print_children(Children, ?inc_depth(?init_maxdepth(MaxDepth)), ["  |"], Xinfo)}.
 
-print_children([], _, _) ->
+print_children(_,Depth, _, _) when ?above_maxdepth(Depth) ->
     0;
-print_children([H], Indent, Xinfo) ->
-    pretty_print(H, Indent, Xinfo, _IsLast = true);
-print_children([H | T], Indent, Xinfo) ->
-    N = pretty_print(H, Indent, Xinfo, _IsLast = false),
-    N + print_children(T, Indent, Xinfo).
+print_children([],_, _, _) ->
+    0;
+print_children([H], Depth, Indent, Xinfo) ->
+    pretty_print(H, Indent, Depth, Xinfo, _IsLast = true);
+print_children([H | T], Depth, Indent, Xinfo) ->
+    N = pretty_print(H, Indent, Depth, Xinfo, _IsLast = false),
+    N + print_children(T, Depth, Indent, Xinfo).
 
-pretty_print(Node, RIndent, Xinfo, IsLast) ->
+pretty_print(Node, RIndent, Depth, Xinfo, IsLast) ->
     Indent =
         case IsLast of
             false -> lists:reverse(RIndent);
@@ -42,7 +54,7 @@ pretty_print(Node, RIndent, Xinfo, IsLast) ->
             false -> ["  |" | RIndent]
         end,
     push_visited(Node),
-    1 + print_children(Children, R, Xinfo).
+    1 + print_children(Children, ?inc_depth(Depth), R, Xinfo).
 
 get_children(Node) ->
     [
@@ -70,9 +82,14 @@ mk_xinfo(Node, L) ->
                 [io_lib:format(", current=~p:~p/~p", [M, F, A]) | Acc];
             ({initial_call, {M, F, A}}, Acc) ->
                 [io_lib:format(", init=~p:~p/~p", [M, F, A]) | Acc];
+            ({registered_name, Name}, Acc) ->
+                case Name of
+                    [] -> Acc;
+                    _ -> [io_lib:format(", regname=~p",[Name]) | Acc]
+                end;
             ({trap_exit, Bool}, Acc) ->
                 case Bool of
-                    true -> [io_lib:format(", trap_exit=true", []) | Acc];
+                    true -> [io_lib:format(", trap_exit", []) | Acc];
                     _ -> Acc
                 end;
             ({Key, Val}, Acc) ->
