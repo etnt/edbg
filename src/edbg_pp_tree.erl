@@ -53,7 +53,7 @@ print(Node, Xinfo) when is_list(Xinfo) ->
 %% @end
 %%--------------------------------------------------------------------
 print(Node, MaxDepth, Xinfo) when is_list(Xinfo) ->
-    io:format("~p~n", [Node]),
+    io:format("~p ~s~n", [Node, mk_xinfo(Node, Xinfo)]),
     init_visited(),
     push_visited(Node),
     Children = get_children(Node),

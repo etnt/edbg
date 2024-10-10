@@ -80,6 +80,9 @@
          mlist/3,
          pl/0,
          plist/0,
+         pp_tree/1,
+         pp_tree/2,
+         pp_tree/3,
          n/1,
          n/3,
          next/1,
@@ -145,6 +148,28 @@
 -define(edbg_color_srv_init(), ok).
 -endif.
 
+
+%% @doc Prints the process tree starting from the given node.
+%% @param Node The starting node (pid or port) for the tree.
+%% @end
+pp_tree(Pid) ->
+    edbg_pp_tree:print(Pid).
+
+%% @doc Prints the process tree with additional information.
+%% @param Node The starting node (pid or port) for the tree.
+%% @param Xinfo List of additional process information to display.
+%% @end
+pp_tree(Pid, Options) ->
+    edbg_pp_tree:print(Pid, Options).
+
+%% @doc Prints the process tree with a maximum depth and additional information.
+%% @param Node The starting node (pid or port) for the tree.
+%% @param MaxDepth The maximum depth to traverse in the tree.
+%% @param Xinfo List of additional process information to display.
+%% @return {ok, TotalNodes} where TotalNodes is the number of nodes printed.
+%% @end
+pp_tree(Pid, MaxDepth, Options) ->
+    edbg_pp_tree:print(Pid, MaxDepth, Options).
 
 %% @private
 init_edbg() ->
