@@ -480,9 +480,25 @@ prompt(Pid) when is_pid(Pid) ->
     Prompt = "tlist> ",
     rloop(Pid, Prompt).
 
+%%% Since OTP-26 the Erlang shell was changed so that edbg's
+%%% old prompt-loop (using io:get_line/1) will not have the
+%%% input added to the shell history.
+%%% This code try to solve this.
+get_line(Prompt) when is_list(Prompt) ->
+    try list_to_integer(erlang:system_info(otp_release)) of
+        Vsn when Vsn >= 26 ->
+            edbg_shell_history:get_line(list_to_atom(Prompt));
+        _ ->
+            io:get_line(Prompt)
+    catch
+        _:_ ->
+            io:get_line(Prompt)
+    end.
+
+
 %% @private
 rloop(Pid, Prompt) ->
-    case string:tokens(b2l(io:get_line(Prompt)), "\n") of
+    case string:tokens(b2l(get_line(Prompt)), "\n") of
         ["eval"++X]  -> xeval(?mytracer, X);
         ["xnall"++X] -> xnall(?mytracer, X);
         ["xall"++X]  -> xall(?mytracer, X);
