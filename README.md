@@ -56,7 +56,8 @@ at your work desktop without the hassle of forwarding a GUI,
 then `edbg` is perfect.
 
 You can see examples of how to use `edbg` in
-the [wiki](https://github.com/etnt/edbg/wiki) pages.
+the [wiki](https://github.com/etnt/edbg/wiki) pages, or
+[here](https://etnt.gitbook.io/edbg).
 
 <a name="install"></a>
 ## INSTALL
