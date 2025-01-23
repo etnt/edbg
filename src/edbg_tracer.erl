@@ -1122,7 +1122,6 @@ tloop(#t{trace_max = MaxTrace} = X, Tlist, Buf) ->
 		                _ ->
 			                NewAt0
                     end,
-            io:format("up: NewAt0=~p , NewAt=~p~n",[NewAt0,NewAt]),
             NewTlist = list_trace(Tlist#tlist{at = NewAt}, Buf),
             ?MODULE:tloop(X, NewTlist, Buf);
 
