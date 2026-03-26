@@ -17,7 +17,7 @@ RESET='\033[0m'
 
 # Slide counter
 CURRENT_SLIDE=1
-TOTAL_SLIDES=14
+TOTAL_SLIDES=15
 
 # Clear screen function
 clear_screen() {
@@ -29,7 +29,7 @@ show_header() {
     echo -e "${BOLD}${CYAN}"
     echo "╔════════════════════════════════════════════════════════════════════════╗"
     echo "║                         EDBG PRESENTATION                              ║"
-    echo "║                   Erlang Debugger & Tracer                            ║"
+    echo "║                   Erlang Debugger & Tracer                             ║"
     echo "╚════════════════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
 }
@@ -397,6 +397,29 @@ slide_14() {
     show_footer
 }
 
+slide_15() {
+    clear_screen
+    show_header
+    echo -e "${BOLD}${MAGENTA}Contributors${RESET}"
+    echo ""
+    echo -e "${CYAN}Thank you to all contributors who made EDBG possible:${RESET}"
+    echo ""
+    echo -e "  • Torbjörn Törnkvist"
+    echo -e "  • Per Andersson"
+    echo -e "  • Johan Vikman Lundström"
+    echo -e "  • Tomas Bjurman"
+    echo -e "  • Hiroto Shibuya"
+    echo -e "  • Alexander Schüssler"
+    echo -e "  • Kåre von Geijer"
+    echo -e "  • Claes Nästén"
+    echo -e "  • Christofer Tornkvist"
+    echo -e "  • Andreas Hasselberg"
+    echo ""
+    echo -e "${GREEN}Your contributions have helped build a powerful debugging tool!${RESET}"
+    echo ""
+    show_footer
+}
+
 # Navigation function
 navigate() {
     while true; do
@@ -415,6 +438,7 @@ navigate() {
             12) slide_12 ;;
             13) slide_13 ;;
             14) slide_14 ;;
+            15) slide_15 ;;
         esac
 
         read -r input
