@@ -235,6 +235,7 @@ ploop(Prompt) ->
 
 prompt(Pid) when is_pid(Pid) ->
     process_flag(trap_exit, true),
+    edbg_shell_history:enable(),
     State0 = refresh(),
     State = help(show(State0)),
     loop(Pid, prompt(), State).
@@ -244,7 +245,7 @@ prompt(Pid) when is_pid(Pid) ->
 loop(Pid, Prompt, State0) ->
     io:format("~n",[]),
     State =
-        case string:tokens(b2l(io:get_line(Prompt)), "\n") of
+        case string:tokens(b2l(edbg_shell_history:get_line(Prompt)), "\n") of
             ["h"++X]  -> help(X, State0);
             ["x"++X]  -> help(expand(X, State0));
             ["s"++X]  -> shrink_or_show(X, State0);

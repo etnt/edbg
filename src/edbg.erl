@@ -1177,12 +1177,13 @@ find_var(Var, Bindings) ->
 
 prompt(Pid, Apid) when is_pid(Pid), is_pid(Apid) ->
     Prompt = "("++pid_to_list(Pid)++")> ",
+    edbg_shell_history:enable(),
     ploop(Apid, Prompt, _PrevCmd = []).
 
 %% @private
 ploop(Apid, Prompt, PrevCmd) ->
     %% Empty prompt repeats previous command
-    Cmd = case string:tokens(io:get_line(Prompt), "\n") of
+    Cmd = case string:tokens(edbg_shell_history:get_line(Prompt), "\n") of
                 []   -> PrevCmd;
                 Cmd0 -> Cmd0
           end,
