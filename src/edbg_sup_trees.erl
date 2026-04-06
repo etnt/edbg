@@ -152,7 +152,8 @@
         , start/0
         , supervisors/0
         , supervisors/1
-        ]).
+        , ploop/1
+    ]).
 
 
 -define(SERVER, ?MODULE).
