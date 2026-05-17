@@ -48,6 +48,7 @@ Example: Display content of a function call argument
 * [Tracing](#tracing)
 * [Supervision Tree Browser](#supervisor-tree)
 * [Debugger](#debugger)
+* [MCP Server](#mcp-server) — AI-assisted tracing via Model Context Protocol
 
 If you don't like GUI's, `edbg` may be your cup of tea.
 
@@ -145,4 +146,22 @@ usual debugger operations.
 
 What differentiates `edbg` is the fact that you are running in a 
 terminal.
+
+<a name="mcp-server"></a>
+## MCP Server
+
+`edbg` includes an MCP (Model Context Protocol) server that enables
+AI assistants to control tracing sessions programmatically. This allows
+you to use natural language to start traces, analyze results, and
+diagnose issues in your Erlang applications.
+
+Start the REST API in your Erlang shell:
+
+```erlang
+edbg:start_api().
+```
+
+Then configure your AI tool (e.g. VS Code Copilot) to connect to the
+MCP server. See the [MCP README](mcp/README.md) for full setup
+instructions, including VS Code `mcp.json` configuration.
 

@@ -95,6 +95,9 @@
          s/3,
          step/1,
          step/3,
+         start_api/0,
+         start_api/1,
+         stop_api/0,
          suptrees/0,
          t/2,
          t/3,
@@ -197,6 +200,25 @@ xfile() ->
 %% @doc As 'file/1' but hint that Elixir code is traced.
 xfile(Fname) ->
     edbg_tracer:xfile(Fname).
+
+%% @doc Start the edbg REST API on the default port (4242).
+%%
+%% The REST API enables the edbg MCP server to interact with
+%% the tracing functionality programmatically via HTTP/JSON.
+%% Binds to 127.0.0.1 only.
+%% @end
+start_api() ->
+    edbg_rest_api:start().
+
+%% @doc Start the edbg REST API on a custom port.
+%% @end
+start_api(Port) ->
+    edbg_rest_api:start(Port).
+
+%% @doc Stop the edbg REST API server.
+%% @end
+stop_api() ->
+    edbg_rest_api:stop().
 
 %% @doc Start tracing making use of a previously stored configuration.
 %%
