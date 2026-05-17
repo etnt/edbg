@@ -43,11 +43,15 @@ Example: Display content of a function call argument
   ...snip...
 
 ```
-`edbg` consists of three main parts:
+`edbg` consists of two main parts:
 
 * [Tracing](#tracing)
-* [Supervision Tree Browser](#supervisor-tree)
 * [Debugger](#debugger)
+
+and a couple of auxillay tools:
+
+* [Supervision Tree Browser](#supervisor-tree)
+* [Linked Tree Browser](#linked-tree)
 * [MCP Server](#mcp-server) — AI-assisted tracing via Model Context Protocol
 
 If you don't like GUI's, `edbg` may be your cup of tea.
@@ -132,6 +136,19 @@ Note that the (edbg) tracing is built-in; i.e you can start tracing
 on any process you can access from the supervision browser.
 This will trace all modules that are executing within the process
 as well as any messages sent/received from/to the process.
+
+
+<a name="linked-tree"></a>
+## Linked Tree Browser
+
+The `edbg:pp_tree/1,2,3` functions generate a visual representation of
+linked Erlang processes. Starting from a given PID, it traverses the
+process links displaying each process and its children with indentation
+to highlight the hierarchy. Cycles are handled by avoiding already
+visited processes.
+
+You can restrict the max depth and specify which process info items
+to display (e.g. `current_function`, `registered_name`, `trap_exit`).
 
 
 <a name="debugger"></a>
