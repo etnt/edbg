@@ -1,3 +1,23 @@
 {
-    "erlang.inlayHintsEnabled": true
+    "erlang.inlayHintsEnabled": true,
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#5546cc",
+        "activityBar.background": "#5546cc",
+        "activityBar.foreground": "#e7e7e7",
+        "activityBar.inactiveForeground": "#e7e7e799",
+        "activityBarBadge.background": "#d67569",
+        "activityBarBadge.foreground": "#15202b",
+        "commandCenter.border": "#e7e7e799",
+        "sash.hoverBorder": "#5546cc",
+        "statusBar.background": "#3e30af",
+        "statusBar.foreground": "#e7e7e7",
+        "statusBarItem.hoverBackground": "#5546cc",
+        "statusBarItem.remoteBackground": "#3e30af",
+        "statusBarItem.remoteForeground": "#e7e7e7",
+        "titleBar.activeBackground": "#3e30af",
+        "titleBar.activeForeground": "#e7e7e7",
+        "titleBar.inactiveBackground": "#3e30af99",
+        "titleBar.inactiveForeground": "#e7e7e799"
+    },
+    "peacock.color": "#3e30af"
 }

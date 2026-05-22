@@ -2,7 +2,7 @@
 %%% @doc edbg REST API server.
 %%%
 %%% A lightweight HTTP/JSON API exposing edbg tracing operations.
-%%% Uses OTP's inets httpd with mod_esi for dynamic request handling.
+%%% Uses OTP's inets httpd with httpd_router for declarative routing.
 %%% Binds to 127.0.0.1 only (no authentication needed).
 %%%
 %%% Start with: edbg:start_api() or edbg:start_api(Port)
@@ -12,7 +12,13 @@
 -module(edbg_rest_api).
 
 -export([start/0, start/1, stop/0]).
--export([handle/3]).
+-export([handle_trace_start/1,
+         handle_trace_stop/1,
+         handle_trace_status/1,
+         handle_trace_result/1,
+         handle_trace_summary/1,
+         handle_trace_config_get/1,
+         handle_trace_config_set/1]).
 
 -define(DEFAULT_PORT, 4242).
 
@@ -29,6 +35,36 @@ start() ->
 %%--------------------------------------------------------------------
 start(Port) when is_integer(Port), Port > 0 ->
     ok = ensure_inets(),
+    {ok, _} = application:ensure_all_started(httpd_router),
+
+    %% Create a per-port route table
+    TableName = httpd_router:mk_table_name({127,0,0,1}, Port),
+    {ok, _} = httpd_router:start(TableName),
+
+    %% Register routes
+    httpd_router:table_add_route(
+      TableName, "POST", "/api/trace/start",
+      fun edbg_rest_api:handle_trace_start/1, []),
+    httpd_router:table_add_route(
+      TableName, "POST", "/api/trace/stop",
+      fun edbg_rest_api:handle_trace_stop/1, []),
+    httpd_router:table_add_route(
+      TableName, "GET", "/api/trace/status",
+      fun edbg_rest_api:handle_trace_status/1, []),
+    httpd_router:table_add_route(
+      TableName, "GET", "/api/trace/result",
+      fun edbg_rest_api:handle_trace_result/1, []),
+    httpd_router:table_add_route(
+      TableName, "GET", "/api/trace/summary",
+      fun edbg_rest_api:handle_trace_summary/1, []),
+    httpd_router:table_add_route(
+      TableName, "GET", "/api/trace/config",
+      fun edbg_rest_api:handle_trace_config_get/1, []),
+    httpd_router:table_add_route(
+      TableName, "POST", "/api/trace/config",
+      fun edbg_rest_api:handle_trace_config_set/1, []),
+
+    %% Start httpd with httpd_router
     DocRoot = "/tmp/edbg_rest_api",
     ok = filelib:ensure_dir(DocRoot ++ "/dummy"),
     {ok, _Pid} = inets:start(httpd, [
@@ -37,8 +73,8 @@ start(Port) when is_integer(Port), Port > 0 ->
         {server_root, "/tmp"},
         {document_root, DocRoot},
         {bind_address, {127,0,0,1}},
-        {modules, [mod_alias, mod_esi]},
-        {erl_script_alias, {"/api", [edbg_rest_api]}}
+        {modules, [httpd_router]},
+        {httpd_router_table, TableName}
     ]),
     io:format("edbg REST API started on http://127.0.0.1:~p/api/...~n", [Port]),
     ok.
@@ -63,73 +99,21 @@ stop() ->
     ok.
 
 %%--------------------------------------------------------------------
-%% mod_esi callback — dispatches to handler functions.
-%% URL format: /api/edbg_rest_api/<function>?params
-%%--------------------------------------------------------------------
-handle(SessionID, Env, Input) ->
-    PathInfo0 = proplists:get_value(path_info, Env, ""),
-    %% path_info may include query string — split it off
-    {PathRaw, QueryFromPath} = case string:split(PathInfo0, "?") of
-                                   [P, Q] -> {P, Q};
-                                   [P] -> {P, ""}
-                               end,
-    %% Ensure path starts with /
-    PathInfo = case PathRaw of
-                   "/" ++ _ -> PathRaw;
-                   "" -> "/";
-                   _ -> "/" ++ PathRaw
-               end,
-    QueryStr0 = proplists:get_value(query_string, Env, ""),
-    QueryStr = case {QueryStr0, QueryFromPath} of
-                   {"", Q2} -> Q2;
-                   {Q1, _} -> Q1
-               end,
-    Method = proplists:get_value(request_method, Env, "GET"),
-    Query = parse_query(QueryStr),
-    try
-        dispatch(SessionID, Method, {PathInfo, Query}, Input)
-    catch
-        _:Error:Stack ->
-            ErrorMsg = io_lib:format("~p", [Error]),
-            StackMsg = io_lib:format("~p", [Stack]),
-            send_json(SessionID, 500,
-                      #{error => list_to_binary(lists:flatten(ErrorMsg)),
-                        stack => list_to_binary(lists:flatten(StackMsg))})
-    end.
-
-%%--------------------------------------------------------------------
-%% Internal: routing
+%% Route handlers
 %%--------------------------------------------------------------------
 
-parse_query([]) -> #{};
-parse_query(QueryStr) ->
-    Pairs = string:split(QueryStr, "&", all),
-    maps:from_list(
-      lists:filtermap(
-        fun(Pair) ->
-                case string:split(Pair, "=") of
-                    [Key, Val] ->
-                        {true, {list_to_binary(Key), list_to_binary(Val)}};
-                    _ -> false
-                end
-        end, Pairs)).
-
-%%--------------------------------------------------------------------
-%% Route: /trace/start
-%%--------------------------------------------------------------------
-dispatch(SessionID, _Method, {"/trace/start", Query}, Input) ->
-    Body = get_body(Query, Input),
-    Modules = maps:get(<<"modules">>, Body, []),
-    TraceTime = maps:get(<<"trace_time">>, Body, 10),
-    MaxMsgs = maps:get(<<"max_msgs">>, Body, 1000),
-    MonotonicTs = maps:get(<<"monotonic_ts">>, Body, false),
-    Memory = maps:get(<<"memory">>, Body, false),
-    SendReceive = maps:get(<<"send_receive">>, Body, false),
+handle_trace_start(#{body := Body}) ->
+    Decoded = decode_body(Body),
+    Modules = maps:get(<<"modules">>, Decoded, []),
+    TraceTime = maps:get(<<"trace_time">>, Decoded, 10),
+    MaxMsgs = maps:get(<<"max_msgs">>, Decoded, 1000),
+    MonotonicTs = maps:get(<<"monotonic_ts">>, Decoded, false),
+    Memory = maps:get(<<"memory">>, Decoded, false),
+    SendReceive = maps:get(<<"send_receive">>, Decoded, false),
 
     ModAtoms = [binary_to_atom(M, utf8) || M <- Modules],
 
     %% Build options list
-    %% Disable cfg_file to prevent loading previous config from disk
     Opts0 = [{max_msgs, MaxMsgs},
              {trace_time, TraceTime},
              {cfg_file, false}],
@@ -143,34 +127,23 @@ dispatch(SessionID, _Method, {"/trace/start", Query}, Input) ->
     %% Start tracing via edbg
     _Result = edbg:fstart(ModAtoms, Opts3),
 
-    send_json(SessionID, 200,
-              #{status => <<"tracing_started">>,
-                modules => Modules,
-                trace_time => TraceTime,
-                max_msgs => MaxMsgs});
+    {json, 200, #{status => <<"tracing_started">>,
+                  modules => Modules,
+                  trace_time => TraceTime,
+                  max_msgs => MaxMsgs}}.
 
-%%--------------------------------------------------------------------
-%% Route: /trace/stop
-%%--------------------------------------------------------------------
-dispatch(SessionID, _Method, {"/trace/stop", _Query}, _Input) ->
+handle_trace_stop(_Ctx) ->
     edbg:fstop(),
-    send_json(SessionID, 200, #{status => <<"tracing_stopped">>});
+    {json, 200, #{status => <<"tracing_stopped">>}}.
 
-%%--------------------------------------------------------------------
-%% Route: /trace/status
-%%--------------------------------------------------------------------
-dispatch(SessionID, _Method, {"/trace/status", _Query}, _Input) ->
-    %% Check if the tracer process is alive
+handle_trace_status(_Ctx) ->
     Running = case whereis(mytracer) of
                   undefined -> false;
                   Pid when is_pid(Pid) -> is_process_alive(Pid)
               end,
-    send_json(SessionID, 200, #{running => Running});
+    {json, 200, #{running => Running}}.
 
-%%--------------------------------------------------------------------
-%% Route: /trace/result
-%%--------------------------------------------------------------------
-dispatch(SessionID, _Method, {"/trace/result", Query}, _Input) ->
+handle_trace_result(#{query := Query}) ->
     Offset = binary_to_integer(maps:get(<<"offset">>, Query, <<"0">>)),
     Limit = binary_to_integer(maps:get(<<"limit">>, Query, <<"50">>)),
     Format = maps:get(<<"format">>, Query, <<"text">>),
@@ -182,81 +155,55 @@ dispatch(SessionID, _Method, {"/trace/result", Query}, _Input) ->
             Total = length(AllEntries),
             Slice = lists:sublist(AllEntries, Offset + 1, Limit),
             Formatted = [format_entry(E, Format) || E <- Slice],
-            send_json(SessionID, 200,
-                      #{total => Total,
-                        offset => Offset,
-                        limit => Limit,
-                        entries => Formatted});
+            {json, 200, #{total => Total,
+                          offset => Offset,
+                          limit => Limit,
+                          entries => Formatted}};
         {error, enoent} ->
-            send_json(SessionID, 200,
-                      #{total => 0, offset => Offset, limit => Limit,
-                        entries => [],
-                        message => <<"No trace result file found. Run a trace first.">>});
+            {json, 200, #{total => 0, offset => Offset, limit => Limit,
+                          entries => [],
+                          message => <<"No trace result file found. Run a trace first.">>}};
         {error, Reason} ->
-            send_json(SessionID, 500,
-                      #{error => list_to_binary(
-                                   io_lib:format("~p", [Reason]))})
-    end;
+            {json, 500, #{error => list_to_binary(
+                                     io_lib:format("~p", [Reason]))}}
+    end.
 
-%%--------------------------------------------------------------------
-%% Route: /trace/summary
-%%--------------------------------------------------------------------
-dispatch(SessionID, _Method, {"/trace/summary", _Query}, _Input) ->
+handle_trace_summary(_Ctx) ->
     LogFile = get_log_file(),
     case file:read_file(LogFile) of
         {ok, Bin} ->
             AllEntries = binary_to_term(Bin),
             Summary = build_summary(AllEntries),
-            send_json(SessionID, 200, Summary);
+            {json, 200, Summary};
         {error, enoent} ->
-            send_json(SessionID, 200,
-                      #{total_entries => 0,
-                        message => <<"No trace result file found.">>});
+            {json, 200, #{total_entries => 0,
+                          message => <<"No trace result file found.">>}};
         {error, Reason} ->
-            send_json(SessionID, 500,
-                      #{error => list_to_binary(
-                                   io_lib:format("~p", [Reason]))})
-    end;
+            {json, 500, #{error => list_to_binary(
+                                     io_lib:format("~p", [Reason]))}}
+    end.
 
-%%--------------------------------------------------------------------
-%% Route: GET /trace/config
-%%--------------------------------------------------------------------
-dispatch(SessionID, _Method, {"/trace/config", Query}, Input) ->
-    case maps:size(Query) > 0 orelse Input =/= [] of
-        true ->
-            %% Has body/params: update config
-            Body = get_body(Query, Input),
-            try
-                Config = edbg_file_tracer:get_config(),
-                Funs = build_config_funs(Body),
-                edbg_file_tracer:set_config(Funs, Config),
-                NewConfig = edbg_file_tracer:get_config(),
-                send_json(SessionID, 200, format_config(NewConfig))
-            catch
-                exit:{noproc, _} ->
-                    send_json(SessionID, 500,
-                              #{error => <<"Tracer process not running.">>})
-            end;
-        false ->
-            %% No body: read config
-            try
-                Config = edbg_file_tracer:get_config(),
-                send_json(SessionID, 200, format_config(Config))
-            catch
-                exit:{noproc, _} ->
-                    send_json(SessionID, 200,
-                              #{message => <<"Tracer not started. No config available.">>})
-            end
-    end;
+handle_trace_config_get(_Ctx) ->
+    try
+        Config = edbg_file_tracer:get_config(),
+        {json, 200, format_config(Config)}
+    catch
+        exit:{noproc, _} ->
+            {json, 200, #{message => <<"Tracer not started. No config available.">>}}
+    end.
 
-%%--------------------------------------------------------------------
-%% Fallback: unknown route
-%%--------------------------------------------------------------------
-dispatch(SessionID, Method, {Path, _Query}, _Input) ->
-    send_json(SessionID, 404,
-              #{error => <<"Not found">>,
-                method => list_to_binary(Method),
-                path => list_to_binary(Path)}).
+handle_trace_config_set(#{body := Body}) ->
+    Decoded = decode_body(Body),
+    try
+        Config = edbg_file_tracer:get_config(),
+        Funs = build_config_funs(Decoded),
+        edbg_file_tracer:set_config(Funs, Config),
+        NewConfig = edbg_file_tracer:get_config(),
+        {json, 200, format_config(NewConfig)}
+    catch
+        exit:{noproc, _} ->
+            {json, 500, #{error => <<"Tracer process not running.">>}}
+    end.
 
 %%--------------------------------------------------------------------
 %% Internal helpers
@@ -268,16 +215,10 @@ ensure_inets() ->
         {error, {already_started, _}} -> ok
     end.
 
-%% Get body from either the 'body' query parameter (URL-encoded JSON)
-%% or from the request input (POST body)
-get_body(Query, Input) ->
-    case maps:get(<<"body">>, Query, undefined) of
-        undefined ->
-            parse_json_input(Input);
-        BodyBin ->
-            %% URL-decode and parse
-            Decoded = uri_string:unquote(binary_to_list(BodyBin)),
-            parse_json_input(Decoded)
+decode_body(<<>>) -> #{};
+decode_body(Body) when is_binary(Body) ->
+    try json:decode(Body)
+    catch _:_ -> #{}
     end.
 
 get_log_file() ->
@@ -288,154 +229,6 @@ get_log_file() ->
     catch
         _:_ -> "./edbg.trace_result"
     end.
-
-%%--------------------------------------------------------------------
-%% JSON encoding (minimal, no external deps)
-%%--------------------------------------------------------------------
-
-send_json(SessionID, Code, Data) ->
-    Json = encode_json(Data),
-    StatusLine = case Code of
-                     200 -> "200 OK";
-                     404 -> "404 Not Found";
-                     500 -> "500 Internal Server Error";
-                     _ -> integer_to_list(Code)
-                 end,
-    mod_esi:deliver(SessionID,
-                    io_lib:format(
-                      "Status: ~s\r\n"
-                      "Content-Type: application/json\r\n\r\n"
-                      "~s", [StatusLine, Json])).
-
-encode_json(Map) when is_map(Map) ->
-    Pairs = maps:fold(
-              fun(K, V, Acc) ->
-                      Key = encode_json_key(K),
-                      Val = encode_json(V),
-                      [io_lib:format("~s:~s", [Key, Val]) | Acc]
-              end, [], Map),
-    ["{", lists:join(",", Pairs), "}"];
-encode_json(List) when is_list(List) ->
-    Items = [encode_json(I) || I <- List],
-    ["[", lists:join(",", Items), "]"];
-encode_json(Bin) when is_binary(Bin) ->
-    ["\"", json_escape(Bin), "\""];
-encode_json(Atom) when is_atom(Atom) ->
-    case Atom of
-        true -> "true";
-        false -> "false";
-        null -> "null";
-        _ -> ["\"", atom_to_list(Atom), "\""]
-    end;
-encode_json(Int) when is_integer(Int) ->
-    integer_to_list(Int);
-encode_json(Float) when is_float(Float) ->
-    io_lib:format("~g", [Float]);
-encode_json(Pid) when is_pid(Pid) ->
-    ["\"", pid_to_list(Pid), "\""];
-encode_json(Other) ->
-    ["\"", json_escape(list_to_binary(
-                         io_lib:format("~p", [Other]))), "\""].
-
-encode_json_key(K) when is_atom(K) ->
-    ["\"", atom_to_list(K), "\""];
-encode_json_key(K) when is_binary(K) ->
-    ["\"", json_escape(K), "\""];
-encode_json_key(K) ->
-    ["\"", io_lib:format("~p", [K]), "\""].
-
-json_escape(Bin) when is_binary(Bin) ->
-    json_escape(binary_to_list(Bin));
-json_escape([]) -> [];
-json_escape([$" | T]) -> [$\\, $" | json_escape(T)];
-json_escape([$\\ | T]) -> [$\\, $\\ | json_escape(T)];
-json_escape([$\n | T]) -> [$\\, $n | json_escape(T)];
-json_escape([$\r | T]) -> [$\\, $r | json_escape(T)];
-json_escape([$\t | T]) -> [$\\, $t | json_escape(T)];
-json_escape([C | T]) when C < 32 ->
-    io_lib:format("\\u~4.16.0B", [C]) ++ json_escape(T);
-json_escape([C | T]) -> [C | json_escape(T)].
-
-%%--------------------------------------------------------------------
-%% JSON input parsing (minimal)
-%%--------------------------------------------------------------------
-
-parse_json_input([]) -> #{};
-parse_json_input(Input) when is_list(Input) ->
-    try
-        %% Input from mod_esi is the request body as a string
-        Bin = list_to_binary(Input),
-        decode_json(Bin)
-    catch
-        _:_ -> #{}
-    end.
-
-%% Minimal JSON decoder — handles objects, arrays, strings, numbers, booleans
-decode_json(Bin) ->
-    {Value, _Rest} = decode_value(skip_ws(Bin)),
-    Value.
-
-decode_value(<<${, Rest/binary>>) -> decode_object(skip_ws(Rest), #{});
-decode_value(<<$[, Rest/binary>>) -> decode_array(skip_ws(Rest), []);
-decode_value(<<$", Rest/binary>>) -> decode_string(Rest, []);
-decode_value(<<"true", Rest/binary>>) -> {true, Rest};
-decode_value(<<"false", Rest/binary>>) -> {false, Rest};
-decode_value(<<"null", Rest/binary>>) -> {null, Rest};
-decode_value(<<C, _/binary>> = Bin) when C >= $0, C =< $9; C == $- ->
-    decode_number(Bin, []).
-
-decode_object(<<$}, Rest/binary>>, Acc) -> {Acc, Rest};
-decode_object(<<$", Rest0/binary>>, Acc) ->
-    {Key, Rest1} = decode_string(Rest0, []),
-    <<$:, Rest2/binary>> = skip_ws(Rest1),
-    {Value, Rest3} = decode_value(skip_ws(Rest2)),
-    Rest4 = skip_ws(Rest3),
-    case Rest4 of
-        <<$,, Rest5/binary>> -> decode_object(skip_ws(Rest5), Acc#{Key => Value});
-        <<$}, Rest5/binary>> -> {Acc#{Key => Value}, Rest5}
-    end.
-
-decode_array(<<$], Rest/binary>>, Acc) -> {lists:reverse(Acc), Rest};
-decode_array(Bin, Acc) ->
-    {Value, Rest0} = decode_value(Bin),
-    Rest1 = skip_ws(Rest0),
-    case Rest1 of
-        <<$,, Rest2/binary>> -> decode_array(skip_ws(Rest2), [Value | Acc]);
-        <<$], Rest2/binary>> -> {lists:reverse([Value | Acc]), Rest2}
-    end.
-
-decode_string(<<$", Rest/binary>>, Acc) ->
-    {list_to_binary(lists:reverse(Acc)), Rest};
-decode_string(<<$\\, $", Rest/binary>>, Acc) ->
-    decode_string(Rest, [$" | Acc]);
-decode_string(<<$\\, $\\, Rest/binary>>, Acc) ->
-    decode_string(Rest, [$\\ | Acc]);
-decode_string(<<$\\, $n, Rest/binary>>, Acc) ->
-    decode_string(Rest, [$\n | Acc]);
-decode_string(<<$\\, $r, Rest/binary>>, Acc) ->
-    decode_string(Rest, [$\r | Acc]);
-decode_string(<<$\\, $t, Rest/binary>>, Acc) ->
-    decode_string(Rest, [$\t | Acc]);
-decode_string(<<$\\, $/, Rest/binary>>, Acc) ->
-    decode_string(Rest, [$/ | Acc]);
-decode_string(<<C, Rest/binary>>, Acc) ->
-    decode_string(Rest, [C | Acc]).
-
-decode_number(<<C, Rest/binary>>, Acc)
-  when C >= $0, C =< $9; C == $-; C == $+; C == $.; C == $e; C == $E ->
-    decode_number(Rest, [C | Acc]);
-decode_number(Rest, Acc) ->
-    Str = lists:reverse(Acc),
-    Num = case lists:member($., Str) orelse lists:member($e, Str)
-               orelse lists:member($E, Str) of
-              true -> list_to_float(Str);
-              false -> list_to_integer(Str)
-          end,
-    {Num, Rest}.
-
-skip_ws(<<C, Rest/binary>>) when C == $\s; C == $\t; C == $\n; C == $\r ->
-    skip_ws(Rest);
-skip_ws(Bin) -> Bin.
 
 %%--------------------------------------------------------------------
 %% Trace entry formatting

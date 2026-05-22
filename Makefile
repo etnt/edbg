@@ -45,7 +45,7 @@ clean:
 compile:
 	./rebar3 compile
 
-get-deps: rebar3 old_deps pp_record-dep
+get-deps: rebar3 old_deps pp_record-dep httpd_routed-dep
 
 old-get-deps: old_deps pp_record-dep
 
@@ -67,6 +67,14 @@ pp_record-dep:
 	  cd deps; \
 	  git clone https://github.com/etnt/pp_record.git; \
 	  make -C pp_record old; \
+	fi
+
+httpd_routed-dep:
+	if [ ! -d deps/httpd_router ]; then \
+	  cd deps; \
+	  git clone https://github.com/etnt/httpd_router.git; \
+	  make -C httpd_router; \
+	  cd ..; \
 	fi
 
 rm-deps:

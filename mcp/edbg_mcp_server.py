@@ -81,7 +81,7 @@ def _make_request(url, method="GET", data=None):
 
 def _api_get(path, params=None):
     """GET an edbg REST API path with optional query parameters."""
-    url = f"{EDBG_URL}/api/edbg_rest_api/handle{path}"
+    url = f"{EDBG_URL}/api{path}"
     if params:
         query = "&".join(f"{k}={v}" for k, v in params.items())
         url = f"{url}?{query}"
@@ -89,13 +89,9 @@ def _api_get(path, params=None):
 
 
 def _api_post(path, data=None):
-    """Send data to an edbg REST API path (via GET with body param)."""
-    import urllib.parse
-    url = f"{EDBG_URL}/api/edbg_rest_api/handle{path}"
-    if data is not None:
-        encoded_body = urllib.parse.quote(json.dumps(data))
-        url = f"{url}?body={encoded_body}"
-    return _make_request(url)
+    """POST data to an edbg REST API path."""
+    url = f"{EDBG_URL}/api{path}"
+    return _make_request(url, method="POST", data=data)
 
 
 def _fmt(data):
