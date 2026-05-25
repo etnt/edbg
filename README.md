@@ -70,6 +70,7 @@ the [wiki](https://github.com/etnt/edbg/wiki) pages, or
    Run: make
    Add: code:add_path("YOUR-PATH-HERE/edbg/_build/default/lib/edbg/ebin").
    Add: code:add_path("YOUR-PATH-HERE/edbg/_build/default/lib/pp_record/ebin").
+   Add: code:add_path("YOUR-PATH-HERE/edbg/_build/default/lib/httpd_router/ebin").
      to your ~/.erlang file.
 ```
 
@@ -78,6 +79,7 @@ If you don't fancy rebar and favour plain Make + Erlc then:
    Run: make old
    Add: code:add_path("YOUR-PATH-HERE/edbg/ebin").
    Add: code:add_path("YOUR-PATH-HERE/edbg/deps/pp_record/ebin").
+   Add: code:add_path("YOUR-PATH-HERE/edbg/deps/httpd_router/ebin").
      to your ~/.erlang file.
 ```
 

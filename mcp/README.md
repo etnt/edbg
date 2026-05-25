@@ -37,6 +37,7 @@ Create or edit `.vscode/mcp.json` in your workspace:
 {
   "servers": {
     "edbg": {
+      "type": "stdio",
       "command": "mcp/.venv/bin/python",
       "args": ["mcp/edbg_mcp_server.py", "--transport", "stdio"],
       "env": {
